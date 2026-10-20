@@ -1,0 +1,16 @@
+# Blueprint do Render: botão "Deploy to Render" no README cria tudo isso.
+services:
+  - type: web
+    name: cortaai
+    runtime: docker
+    plan: standard          # 2 GB de RAM: o mínimo confortável para transcrição + OCR
+    healthCheckPath: /saude
+    envVars:
+      - key: CORTAAI_SENHA
+        generateValue: true  # senha gerada pelo Render; veja em Environment
+      - key: ANTHROPIC_API_KEY
+        sync: false          # opcional: cole a sua chave para o Claude escolher os momentos
+    disk:
+      name: cortaai-data
+      mountPath: /data
+      sizeGB: 10

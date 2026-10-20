@@ -45,6 +45,23 @@ pip install -e ".[whisper,parakeet,llm]"
 export ANTHROPIC_API_KEY=...          # opcional: seleção de momentos pelo Claude
 ```
 
+## Deploy na nuvem (link público)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/eduardodocloud/CORTAAI)
+
+1. Clique no botão acima e entre com o GitHub (se o repositório for privado, autorize o Render a lê-lo).
+2. Confirme o Blueprint (`render.yaml`): serviço Docker no plano **Standard** (2 GB de RAM) com disco de 10 GB em `/data`.
+3. Opcional: cole sua `ANTHROPIC_API_KEY` para o Claude escolher os momentos.
+4. Ao terminar o build (~10 min, os modelos são embutidos na imagem), abra o link `https://cortaai-xxxx.onrender.com`.
+   O navegador pede uma senha: ela está em **Environment → `CORTAAI_SENHA`** no painel do Render (qualquer usuário serve).
+
+A mesma imagem roda em qualquer lugar com Docker:
+
+```bash
+docker build -t cortaai .
+docker run -p 8000:8000 -e CORTAAI_SENHA=minhasenha -v cortaai-data:/data cortaai
+```
+
 ## Uso
 
 ### Editor web
@@ -79,6 +96,7 @@ motivo da escolha e o perfil de estilo usado.
 | `CORTAAI_WHISPER_MODEL` | `large-v3-turbo` | modelo do faster-whisper |
 | `CORTAAI_LANGUAGE` | detectado | força o idioma da transcrição (ex.: `pt`) |
 | `CORTAAI_DATA_DIR` | `./data` | uploads, cache de transcrição/rostos e cortes do editor web |
+| `CORTAAI_SENHA` | — | exige senha (HTTP Basic) para abrir o editor; use sempre que ele estiver na internet |
 
 ## Testes
 

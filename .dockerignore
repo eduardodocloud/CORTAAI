@@ -1,0 +1,9 @@
+.git
+.venv
+models
+data
+demo
+tests
+**/__pycache__
+*.mp4
+*.wav

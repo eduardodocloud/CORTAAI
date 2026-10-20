@@ -6,8 +6,11 @@ então a lista de estilos e cortes sobrevive a reinícios.
 
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import logging
+import os
 import shutil
 import threading
 import traceback
@@ -15,8 +18,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..config import get_settings
@@ -37,6 +40,31 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
 
 app = FastAPI(title="CortaAI")
+
+# Senha opcional (HTTP Basic). Obrigatória na prática quando o app fica público na internet.
+PASSWORD = os.environ.get("CORTAAI_SENHA") or ""
+
+
+@app.middleware("http")
+async def _basic_auth(request: Request, call_next):
+    if PASSWORD and request.url.path != "/saude":
+        header = request.headers.get("authorization", "")
+        ok = False
+        if header.lower().startswith("basic "):
+            try:
+                _, _, pwd = base64.b64decode(header[6:]).decode().partition(":")
+                ok = hmac.compare_digest(pwd.encode(), PASSWORD.encode())
+            except Exception:
+                ok = False
+        if not ok:
+            return Response("senha necessária", status_code=401, headers={"WWW-Authenticate": 'Basic realm="CortaAI"'})
+    return await call_next(request)
+
+
+@app.get("/saude")
+def health():
+    return {"ok": True}
+
 app.mount("/files", StaticFiles(directory=DATA), name="files")
 if settings.fonts_dir.exists():
     app.mount("/fonts", StaticFiles(directory=settings.fonts_dir), name="fonts")
