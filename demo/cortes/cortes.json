@@ -1,0 +1,237 @@
+{
+  "fonte": "../samples/fonte_longa.mp4",
+  "duracao_fonte_s": 120.4,
+  "transcricao": "parakeet",
+  "perfil": {
+    "name": "referencia",
+    "source": "referencia",
+    "format": {
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "layout": "crop"
+    },
+    "duration": {
+      "min_s": 13.9,
+      "max_s": 32.5,
+      "target_s": 23.2
+    },
+    "pacing": {
+      "cuts_per_min": 28.4,
+      "punch_in_scale": 1.26,
+      "slow_zoom": false,
+      "jump_cuts": true,
+      "max_pause_s": 0.12,
+      "words_per_sec": 3.63
+    },
+    "captions": {
+      "enabled": true,
+      "font": "Anton",
+      "font_size": 0.1046,
+      "position_y": 0.62,
+      "words_per_caption": 2,
+      "uppercase": true,
+      "primary_color": "#FDFCFA",
+      "highlight_color": "#FCE404",
+      "outline_color": "#000000",
+      "outline_width": 0.043,
+      "shadow": true,
+      "animation": "karaoke",
+      "background_box": false
+    },
+    "title": {
+      "enabled": true,
+      "font": "Montserrat Black",
+      "position_y": 0.121,
+      "font_size": 0.0368,
+      "uppercase": true,
+      "text_color": "#000100",
+      "box_color": "#FDFEFC",
+      "duration_s": null
+    },
+    "content": {
+      "hook_type": "question",
+      "language": null,
+      "guidance": "Comece o corte com uma PERGUNTA provocativa que gere curiosidade. Escolha trechos com gancho forte nos primeiros 3 segundos, uma ideia completa e final com conclusão ou virada. Evite começar no meio de uma frase."
+    },
+    "evidence": {
+      "arquivo": "referencia.mp4",
+      "resolucao": "1080x1920",
+      "duracao_s": 23.2,
+      "fala": {
+        "palavras_por_s": 3.63,
+        "pausa_p90_s": 0.08,
+        "fala_ocupa": 0.95
+      },
+      "edicao": {
+        "trocas_de_plano": 6,
+        "punch_ins": 5,
+        "trocas_por_min": 28.4,
+        "duracao_media_plano_s": 1.94,
+        "planos_com_zoom_lento": 0.0
+      },
+      "layout": {
+        "tipo": "crop",
+        "brilho_topo": 102.9,
+        "nitidez_topo_rel": 1.2
+      },
+      "legendas": {
+        "titulo": {
+          "texto": "O SEGREDO DO DINHEIRO",
+          "posicao_y": 0.121
+        },
+        "caixas_ocr": 175,
+        "caixas_legenda": 66,
+        "palavras_por_legenda": 2,
+        "posicao_y": 0.62,
+        "altura_rel": 0.1046,
+        "proporcao_caractere": 0.43,
+        "cor_principal": "#FDFCFA",
+        "cor_destaque": "#FCE404",
+        "frames_com_destaque": 0.83,
+        "contorno": true,
+        "espessura_contorno": 0.043,
+        "caixa_fundo": false,
+        "animacao": "karaoke"
+      },
+      "gancho": {
+        "tipo": "question",
+        "primeira_frase": "Por que ninguém te conta isso?"
+      }
+    }
+  },
+  "cortes": [
+    {
+      "start": 19.03999900817871,
+      "end": 40.43999980390072,
+      "score": 98.0,
+      "title": "Você sabia que 90% das pessoas desistem…",
+      "hook": "Você sabia que 90% das pessoas desistem antes do primeiro resultado?",
+      "reason": "abre com pergunta, abre com número, gancho com palavras fortes, termina com frase completa",
+      "first_sentence": 4,
+      "last_sentence": 8,
+      "scores": {
+        "gancho": 6.24,
+        "palavras_fortes": 4.66,
+        "final": 0.6,
+        "duracao": -0.12,
+        "ritmo": -0.44,
+        "energia": -0.26,
+        "gancho_pergunta": true,
+        "gancho_numero": true,
+        "gancho_palavras_fortes": 1,
+        "gancho_curta": true,
+        "gancho_comeca_com_conectivo": false,
+        "gancho_comeca_sem_contexto": false,
+        "gancho_exclamacao": false
+      },
+      "duration": 21.4,
+      "path": "demo/cortes/corte_01.mp4",
+      "duracao_s": 21.02,
+      "trechos": 2,
+      "pausas_removidas_s": 0.38,
+      "planos": 9,
+      "arquivo": "corte_01.mp4",
+      "poster_arquivo": "corte_01.jpg"
+    },
+    {
+      "start": 56.119998931884766,
+      "end": 70.75999847054482,
+      "score": 82.3,
+      "title": "Mas olha só, qual é o maior erro de quem…",
+      "hook": "Mas olha só, qual é o maior erro de quem quer ficar rico?",
+      "reason": "abre com pergunta, gancho com palavras fortes, termina com frase completa",
+      "first_sentence": 13,
+      "last_sentence": 16,
+      "scores": {
+        "gancho": 4.16,
+        "palavras_fortes": 4.17,
+        "final": 0.6,
+        "duracao": -0.55,
+        "ritmo": -0.38,
+        "energia": -0.32,
+        "gancho_pergunta": true,
+        "gancho_numero": false,
+        "gancho_palavras_fortes": 3,
+        "gancho_curta": true,
+        "gancho_comeca_com_conectivo": true,
+        "gancho_comeca_sem_contexto": false,
+        "gancho_exclamacao": false
+      },
+      "duration": 14.64,
+      "path": "demo/cortes/corte_02.mp4",
+      "duracao_s": 14.34,
+      "trechos": 2,
+      "pausas_removidas_s": 0.3,
+      "planos": 5,
+      "arquivo": "corte_02.mp4",
+      "poster_arquivo": "corte_02.jpg"
+    },
+    {
+      "start": 89.80075003814697,
+      "end": 113.08074816179276,
+      "score": 57.3,
+      "title": "Agora presta atenção, porque essa é a…",
+      "hook": "Agora presta atenção, porque essa é a parte mais importante do episódio.",
+      "reason": "gancho com palavras fortes, termina com frase completa",
+      "first_sentence": 22,
+      "last_sentence": 27,
+      "scores": {
+        "gancho": 1.44,
+        "palavras_fortes": 1.79,
+        "final": 0.6,
+        "duracao": -0.01,
+        "ritmo": -0.61,
+        "energia": -0.32,
+        "gancho_pergunta": false,
+        "gancho_numero": false,
+        "gancho_palavras_fortes": 1,
+        "gancho_curta": true,
+        "gancho_comeca_com_conectivo": false,
+        "gancho_comeca_sem_contexto": false,
+        "gancho_exclamacao": false
+      },
+      "duration": 23.28,
+      "path": "demo/cortes/corte_03.mp4",
+      "duracao_s": 22.84,
+      "trechos": 3,
+      "pausas_removidas_s": 0.44,
+      "planos": 9,
+      "arquivo": "corte_03.mp4",
+      "poster_arquivo": "corte_03.jpg"
+    },
+    {
+      "start": 0.0,
+      "end": 18.479999840259552,
+      "score": 46.2,
+      "title": "Bom dia, pessoal, sejam bem-vindos a mais…",
+      "hook": "Bom dia, pessoal, sejam bem-vindos a mais um episódio do nosso podcast.",
+      "reason": "termina com frase completa",
+      "first_sentence": 0,
+      "last_sentence": 3,
+      "scores": {
+        "gancho": 0.64,
+        "palavras_fortes": 0.51,
+        "final": 0.6,
+        "duracao": -0.31,
+        "ritmo": -0.49,
+        "energia": -0.18,
+        "gancho_pergunta": false,
+        "gancho_numero": false,
+        "gancho_palavras_fortes": 0,
+        "gancho_curta": true,
+        "gancho_comeca_com_conectivo": false,
+        "gancho_comeca_sem_contexto": false,
+        "gancho_exclamacao": false
+      },
+      "duration": 18.48,
+      "path": "demo/cortes/corte_04.mp4",
+      "duracao_s": 17.82,
+      "trechos": 4,
+      "pausas_removidas_s": 0.66,
+      "planos": 6,
+      "arquivo": "corte_04.mp4",
+      "poster_arquivo": "corte_04.jpg"
+    }
+  ]
+}

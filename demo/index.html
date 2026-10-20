@@ -1,0 +1,120 @@
+<title>CortaAI Demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter+Tight:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: uma coluna de leitura; a referência à esquerda "ensina", os cortes à direita "aplicam" */
+:root {
+  --bg: #f3f1ec; --surface: #ffffff; --fg: #16151a; --muted: #5d5a66; --line: #dedad2;
+  --accent: #e2c200; --accent-ink: #16151a; --accent-text: #8a6f00;
+  --display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  --body: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111015; --surface: #1b1a21; --fg: #f1efe9; --muted: #a29fab; --line: #2e2c36;
+  --accent: #ffe100; --accent-ink: #16151a; --accent-text: #ffe100; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111015; --surface: #1b1a21; --fg: #f1efe9; --muted: #a29fab; --line: #2e2c36;
+  --accent: #ffe100; --accent-ink: #16151a; --accent-text: #ffe100; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1 { font: 400 clamp(44px, 8vw, 84px)/0.95 var(--display); margin: 0; letter-spacing: .5px; text-wrap: balance; }
+h1 mark { background: none; color: var(--accent-text); }
+h2 { font: 400 28px/1.1 var(--display); margin: 0; letter-spacing: .4px; }
+.lede { max-width: 62ch; color: var(--muted); margin: 12px 0 0; font-size: 18px; }
+.label { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+.learn { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 720px) { .learn { grid-template-columns: 1fr; } }
+video { display: block; width: 100%; max-width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 14px; }
+.ref video { border: 3px solid var(--accent); }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.fact { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; min-width: 0; padding-right: 16px; }
+.fact b { font: 700 17px/1.3 var(--body); }
+.fact b code { font: 500 14px var(--mono); }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; border: 1px solid var(--line); margin-right: 4px; }
+.clips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 24px; }
+.clip { display: grid; gap: 10px; min-width: 0; }
+.meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.score { font: 400 30px/1 var(--display); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.dur { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.clip h3 { margin: 0; font-size: 16px; line-height: 1.35; }
+.clip p { margin: 0; color: var(--muted); font-size: 14px; }
+.low { opacity: .72; }
+.next { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 14px; }
+.next ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 70ch; }
+.next code { font: 500 13px var(--mono); background: var(--bg); padding: 2px 6px; border-radius: 5px; }
+section { display: grid; gap: 18px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="label">CortaAI · execução de demonstração</div>
+    <h1>Um podcast de 2 min virou 4 cortes no estilo da <mark>referência</mark></h1>
+    <p class="lede">O CortaAI assistiu ao vídeo de referência, mediu como ele foi editado e aplicou o mesmo padrão nos cortes do vídeo longo. Tudo rodou em CPU, sem API, em 1 min 24 s. Os vídeos são sintéticos (voz gerada em PT-BR), porque o YouTube está bloqueado no ambiente de teste.</p>
+  </header>
+
+  <section>
+    <h2>O que ele aprendeu da referência</h2>
+    <div class="learn">
+      <div class="ref">
+        <video src="referencia.mp4" poster="referencia.jpg" controls playsinline preload="metadata"></video>
+      </div>
+      <div class="facts">
+        <div class="fact"><span class="label">Legenda</span><b>Anton, CAIXA ALTA, 2 palavras</b></div>
+        <div class="fact"><span class="label">Animação</span><b>Karaokê: palavra falada em destaque</b></div>
+        <div class="fact"><span class="label">Cores</span><b><span class="swatch" style="background:#FDFCFA"></span>texto <span class="swatch" style="background:#FCE404"></span>destaque <code>#FCE404</code></b></div>
+        <div class="fact"><span class="label">Posição da legenda</span><b>62% da altura</b></div>
+        <div class="fact"><span class="label">Contorno</span><b>preto, 4,3% da fonte</b></div>
+        <div class="fact"><span class="label">Título fixo</span><b>Montserrat, texto preto em caixa branca, topo (12%)</b></div>
+        <div class="fact"><span class="label">Ritmo</span><b>28 trocas de plano por minuto</b></div>
+        <div class="fact"><span class="label">Punch-in</span><b>5 zooms secos de 1,26×</b></div>
+        <div class="fact"><span class="label">Fala</span><b>3,6 palavras/s, pausas cortadas</b></div>
+        <div class="fact"><span class="label">Gancho</span><b>Abre com pergunta</b></div>
+        <div class="fact"><span class="label">Duração alvo</span><b>23 s (14 a 33 s)</b></div>
+        <div class="fact"><span class="label">Enquadramento</span><b>Rosto em tela cheia</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Os cortes gerados</h2>
+    <div class="clips">
+      <div class="clip">
+        <video src="cortes/corte_01.mp4" poster="cortes/corte_01.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta"><span class="score">98</span><span class="dur">21,0 s · 9 planos</span></div>
+        <h3>Você sabia que 90% das pessoas desistem…</h3>
+        <p>Abre com pergunta e número, gancho com palavras fortes, termina com frase completa.</p>
+      </div>
+      <div class="clip">
+        <video src="cortes/corte_02.mp4" poster="cortes/corte_02.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta"><span class="score">82</span><span class="dur">14,3 s · 5 planos</span></div>
+        <h3>Mas olha só, qual é o maior erro de quem…</h3>
+        <p>Abre com pergunta, gancho com palavras fortes, termina com frase completa.</p>
+      </div>
+      <div class="clip">
+        <video src="cortes/corte_03.mp4" poster="cortes/corte_03.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta"><span class="score">57</span><span class="dur">22,8 s</span></div>
+        <h3>Agora presta atenção, porque essa é a…</h3>
+        <p>Gancho com palavras fortes, termina com frase completa.</p>
+      </div>
+      <div class="clip low">
+        <video src="cortes/corte_04.mp4" poster="cortes/corte_04.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta"><span class="score">46</span><span class="dur">17,8 s</span></div>
+        <h3>Bom dia, pessoal, sejam bem-vindos a mais…</h3>
+        <p>Nota baixa de propósito: só sobrou a abertura do episódio, sem gancho. Os 3 trechos com gancho do roteiro ficaram no topo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="next">
+    <h2>Para rodar com os seus vídeos</h2>
+    <ul>
+      <li><b>Na sua máquina</b> (recomendado): <code>pip install -e ".[whisper,parakeet,llm]"</code>, <code>./scripts/download_models.sh</code> e <code>cortaai servidor</code>. Aceita arquivo ou link do YouTube, Twitch e Kick.</li>
+      <li><b>Aqui na nuvem</b>: libere <code>youtube.com</code>, <code>googlevideo.com</code> e <code>huggingface.co</code> na rede do ambiente, ou reconecte o Google Drive e me diga quais vídeos usar.</li>
+      <li><b>Com o Claude escolhendo os momentos</b>: defina <code>ANTHROPIC_API_KEY</code>. Sem ela, quem escolhe é o pontuador local usado nesta demonstração.</li>
+    </ul>
+  </section>
+</div>

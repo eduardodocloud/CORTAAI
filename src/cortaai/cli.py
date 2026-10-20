@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("-o", "--saida", default="cortes")
     c.add_argument("--sem-ia", action="store_true")
 
+    sub.add_parser("modelos", help="baixa os modelos locais (rosto + transcrição)")
+
     s = sub.add_parser("servidor", help="abre o editor web")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--porta", type=int, default=8000)
@@ -89,9 +91,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{c['arquivo']}  nota {c['score']:>5}  {c['duracao_s']:>5.1f}s  {c['title']}")
         return 0
 
+    if args.cmd == "modelos":
+        from .models import download_models
+
+        download_models(settings.models_dir)
+        return 0
+
     if args.cmd == "servidor":
         import uvicorn
 
+        print(f"\n  Editor aberto em: http://{args.host}:{args.porta}\n")
         uvicorn.run("cortaai.api.server:app", host=args.host, port=args.porta)
         return 0
     return 1
