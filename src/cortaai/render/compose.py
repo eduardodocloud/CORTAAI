@@ -215,11 +215,12 @@ def render_clip(
     title: str | None = None,
     settings: Settings | None = None,
     progress=None,
+    energy: np.ndarray | None = None,
 ) -> dict:
     settings = settings or get_settings()
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    edit = build_edit(transcript.words, start, end, profile, has_cuts_in_source=bool(vis and vis.cuts))
+    edit = build_edit(transcript.words, start, end, profile, energy=energy)
     reframer = Reframer(info, vis, profile)
     fps = profile.format.fps
     W, H = profile.format.width, profile.format.height
@@ -279,4 +280,5 @@ def render_clip(
         "trechos": len(edit.segments),
         "pausas_removidas_s": round((end - start) - edit.duration, 2),
         "planos": len(edit.shots),
+        "edicao": edit.stats,
     }

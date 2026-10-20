@@ -100,6 +100,7 @@ details .row { margin-top: 10px; }
       <canvas id="preview" width="540" height="960"></canvas>
       <div style="display:grid;gap:14px;min-width:0">
         <div class="chips" id="chips"></div>
+        <p class="note" style="margin:0">Ritmo, força do zoom e pausas da referência são só a base: em cada corte eles se ajustam à fala (ênfases puxam punch-in, ideia nova volta ao plano aberto, pergunta ganha respiro antes da resposta, hesitação é cortada).</p>
         <div class="form" id="form"></div>
       </div>
     </div>
@@ -258,7 +259,7 @@ function splitOnSilence(audio, target = 28) {
 async function transcribe(file, opts, onProg) {
   if (window.cortaaiTranscriptOverride) {
     const r = await window.cortaaiTranscriptOverride(file);
-    if (r) return r;
+    if (r) { if (!r.audio) r.audio = await decodeAudio16k(file).catch(() => null); return { ...r, words: refineWordTimes(r.words, r.audio) }; }
   }
   onProg(0.01, "lendo o áudio");
   const audio = await decodeAudio16k(file);
@@ -287,7 +288,23 @@ async function transcribe(file, opts, onProg) {
     }
     await yieldUI();
   }
-  return { words, duration: audio.length / 16000, audio };
+  return { words: refineWordTimes(words, audio), duration: audio.length / 16000, audio };
+}
+
+// O ASR costuma esticar o fim da palavra para dentro do silêncio seguinte. Apara início e fim
+// de cada palavra onde o áudio cai ao nível do fundo, para as pausas reais aparecerem.
+function refineWordTimes(words, audio) {
+  if (!audio || !words.length) return words;
+  const hop = 160, n = Math.floor(audio.length / hop), db = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let j = i * hop; j < (i + 1) * hop; j++) s += audio[j] * audio[j]; db[i] = 10 * Math.log10(s / hop + 1e-10); }
+  const floor = percentile(Array.from(db.filter((_, i) => i % 5 === 0)), 10);
+  const voiced = (i) => i >= 0 && i < n && db[i] > floor + 9;
+  return words.map((w) => {
+    let a = Math.floor(w.start * 100), b = Math.min(n - 1, Math.ceil(w.end * 100));
+    while (b > a + 6 && !voiced(b) && !voiced(b - 1)) b--;
+    while (a < b - 6 && !voiced(a) && !voiced(a + 1)) a++;
+    return { ...w, start: a / 100, end: Math.min(w.end, (b + 3) / 100) };
+  });
 }
 
 function sentences(words, maxGap = 1.2, maxWords = 40) {
@@ -894,38 +911,161 @@ async function claudeSelect(tr, prof, n, key) {
   return out;
 }
 
-// ============================================================================ edição (jump cuts, planos, zoom)
-function buildEdit(words, start, end, prof) {
-  const ws = words.filter((w) => w.start >= start - 0.05 && w.end <= end + 0.05);
-  let spans = [[start, end]];
-  if (prof.pacing.jump_cuts && ws.length) {
-    spans = [];
-    for (const w of ws) {
-      const a = Math.max(start, w.start - 0.06), b = Math.min(end, w.end + 0.12);
-      if (spans.length && a - spans[spans.length - 1][1] <= prof.pacing.max_pause_s) spans[spans.length - 1][1] = Math.max(spans[spans.length - 1][1], b);
-      else spans.push([a, b]);
-    }
-    const merged = [];
-    for (const sp of spans) { const L = merged[merged.length - 1]; if (L && (sp[1] - sp[0] < 0.25 || L[1] - L[0] < 0.25)) L[1] = sp[1]; else merged.push(sp); }
-    spans = merged.filter(([a, b]) => b - a > 0.05);
-  }
-  let t = 0;
-  const segs = spans.map(([a, b]) => { const s = { src_start: a, src_end: b, out_start: t }; t += b - a; return s; });
-  const outWords = [];
-  for (const w of words) for (const s of segs) if (w.start >= s.src_start - 0.01 && w.start < s.src_end) { const a = s.out_start + w.start - s.src_start; outWords.push({ text: w.text, start: a, end: Math.max(a + 0.05, s.out_start + Math.min(w.end, s.src_end) - s.src_start) }); break; }
-  return { segments: segs, duration: t, words: outWords, shots: planShots(segs, t, prof) };
+// ============================================================================ edição contextual (pausas, planos e zoom decididos pela fala)
+// A referência dá a BASE do estilo (ritmo, força do zoom, tamanho das pausas). Cada corte ajusta
+// isso ao que está sendo dito: ênfases puxam punch-in, ideia nova volta para o plano aberto,
+// pergunta ganha respiro antes da resposta, hesitação é cortada seca.
+const FILLER = /^(h?[ãâa]+h*n*|h?[éeê]{2,}|eh+|hu?m+|hmm+|u+h+m*|uh+m*|er+m*)[.,!?…]*$/i;
+
+function wordEnergy(energy, w) {
+  if (!energy) return 0;
+  const a = Math.floor(w.start * 10), b = Math.max(a + 1, Math.ceil(w.end * 10));
+  let s = 0, n = 0; for (let i = a; i < b && i < energy.length; i++) { s += energy[i]; n++; }
+  return n ? s / n : 0;
 }
 
-function planShots(segs, total, prof) {
-  const scale = prof.pacing.punch_in_scale, cpm = prof.pacing.cuts_per_min;
-  if (scale <= 1.01 || cpm <= 0) return [{ a: 0, b: total, z: 1, z2: prof.pacing.slow_zoom ? 1.04 : 1 }];
-  const interval = 60 / cpm, minLen = Math.max(0.7, interval * 0.6);
-  const bounds = [0];
-  for (const s of segs.slice(1)) if (s.out_start - bounds[bounds.length - 1] >= minLen) bounds.push(s.out_start);
-  const filled = [0];
-  bounds.forEach((a, k) => { const b = k + 1 < bounds.length ? bounds[k + 1] : total; const extra = Math.floor((b - a) / interval) - 1; for (let q = 1; q <= extra; q++) filled.push(a + ((b - a) / (extra + 1)) * q); if (b < total) filled.push(b); });
-  const pts = [...new Set(filled.map((x) => +x.toFixed(3)))].sort((x, y) => x - y);
-  return pts.map((a, k) => { const b = k + 1 < pts.length ? pts[k + 1] : total; const z = k % 2 ? scale : 1; return { a, b, z, z2: prof.pacing.slow_zoom ? z * 1.04 : z }; }).filter((s) => s.b - s.a > 0.01);
+// quanto cada palavra "pesa" na fala: conteúdo forte, número, exclamação, resposta, volume e alongamento
+function emphasisScores(ws, energy) {
+  const durs = ws.map((w) => (w.end - w.start) / Math.max(1, w.text.length));
+  const typical = median(durs) || 0.06;
+  return ws.map((w, i) => {
+    const t = w.text, k = nw(t);
+    let s = 0;
+    if (STRONG.has(k)) s += 1;
+    if (/\d/.test(t)) s += 1;
+    if (/!$/.test(t)) s += 1;
+    if (/\?$/.test(t)) s += 0.5;
+    if (i > 0 && /\?$/.test(ws[i - 1].text)) s += 0.8; // resposta logo depois de pergunta
+    const e = wordEnergy(energy, w);
+    if (e > 1.8) s += 1.5; else if (e > 1.0) s += 1;
+    if (t.length >= 4 && durs[i] > typical * 1.6) s += 0.5; // palavra esticada
+    if (k.length <= 2 && !/\d/.test(t)) s -= 0.5; // artigos/preposições não seguram ênfase
+    return s;
+  });
+}
+
+function buildEdit(allWords, start, end, prof, energy = null) {
+  const ref = prof.pacing;
+  let ws = allWords.filter((w) => w.start >= start - 0.05 && w.end <= end + 0.05);
+  const stats = { hesitacoes: 0, pausas_cortadas: 0, respiros: 0, enfases: 0 };
+  // 1) hesitações soltas ("ééé", "hum") saem
+  if (ref.jump_cuts) ws = ws.filter((w, i) => {
+    const prev = ws[i - 1], next = ws[i + 1];
+    const isolated = (!prev || w.start - prev.end > 0.12) && (!next || next.start - w.end > 0.12);
+    if (FILLER.test(w.text.trim()) && isolated) { stats.hesitacoes++; return false; }
+    return true;
+  });
+  const emph = emphasisScores(ws, energy);
+  // 2) pausas: quanto silêncio cada intervalo pode manter depende de onde ele cai na fala
+  const base = clamp(ref.max_pause_s || 0.3, 0.1, 0.45);
+  const allowed = (i) => {
+    const t = ws[i].text;
+    if (/\?$/.test(t)) return clamp(Math.max(base, 0.45), 0.3, 0.65); // respiro antes da resposta
+    if (SENT_END.test(t) && emph[i + 1] >= 2) return clamp(Math.max(base, 0.38), 0.25, 0.55); // antes da punchline
+    if (SENT_END.test(t)) return base;
+    if (/[,;:]$/.test(t)) return Math.min(base, 0.2);
+    return Math.min(base, 0.1); // hesitação no meio da frase
+  };
+  let spans = [[start, end]];
+  if (ref.jump_cuts && ws.length) {
+    spans = [];
+    let a = Math.max(start, ws[0].start - 0.06);
+    for (let i = 0; i + 1 < ws.length; i++) {
+      const gap = ws[i + 1].start - ws[i].end, al = allowed(i);
+      if (gap > al + 0.04) {
+        spans.push([a, Math.min(end, ws[i].end + al * 0.6)]);
+        a = ws[i + 1].start - al * 0.4;
+        stats.pausas_cortadas++;
+        if (al >= 0.3) stats.respiros++;
+      } else if (al >= 0.3 && gap >= 0.3) stats.respiros++;
+    }
+    spans.push([a, Math.min(end, ws[ws.length - 1].end + 0.15)]);
+    const merged = [];
+    for (const sp of spans) { const L = merged[merged.length - 1]; if (L && (sp[1] - sp[0] < 0.25 || L[1] - L[0] < 0.25)) L[1] = sp[1]; else merged.push(sp); }
+    spans = merged.filter(([x, y]) => y - x > 0.05);
+  }
+  let t = 0;
+  const segs = spans.map(([x, y]) => { const s = { src_start: x, src_end: y, out_start: t }; t += y - x; return s; });
+  const toOut = (srcT) => { for (const s of segs) if (srcT >= s.src_start - 0.01 && srcT < s.src_end) return s.out_start + srcT - s.src_start; return null; };
+  const outWords = [];
+  ws.forEach((w, i) => {
+    const a = toOut(w.start); if (a == null) return;
+    const s = segs.find((x) => w.start >= x.src_start - 0.01 && w.start < x.src_end);
+    outWords.push({ text: w.text, start: a, end: Math.max(a + 0.05, s.out_start + Math.min(w.end, s.src_end) - s.src_start), emph: emph[i] });
+  });
+  const shots = planShots(segs, outWords, t, prof, stats);
+  stats.trocas_por_min = +(((shots.length - 1) / Math.max(1, t)) * 60).toFixed(1);
+  return { segments: segs, duration: t, words: outWords, shots, stats };
+}
+
+function planShots(segs, words, total, prof, stats) {
+  const ref = prof.pacing;
+  const baseZoom = ref.punch_in_scale > 1.01 ? ref.punch_in_scale : 1.0;
+  // ritmo base da referência, acelerado/desacelerado pela fala deste trecho
+  const wps = words.length / Math.max(1, total);
+  const speed = clamp(wps / Math.max(1, ref.words_per_sec || 2.8), 0.7, 1.4);
+  const target = clamp(60 / Math.max(2, ref.cuts_per_min || 12) / speed, 0.9, 6);
+  const minGap = Math.max(0.7, target * 0.55), maxGap = Math.max(2.5, target * 1.9);
+  // candidatos a troca de plano, vindos do conteúdo
+  const cands = [];
+  let sentStart = 0;
+  words.forEach((w, i) => {
+    const prev = words[i - 1];
+    if (i > 0 && SENT_END.test(prev.text)) {
+      sentStart = i;
+      // frase nova: volta ao aberto; se ela já abre com ênfase, entra com punch-in
+      const lead = Math.max(w.emph, words[i + 1]?.emph ?? -9);
+      // (vale mais que uma ênfase colada nela, senão o plano apertado "vaza" para a ideia calma seguinte)
+      cands.push(lead >= 1 ? { t: w.start - 0.04, score: 2.1 + lead * 0.3, kind: "enfase", lead }
+        : { t: w.start - 0.04, score: 2.1 + (/\?$/.test(prev.text) ? 0.4 : 0), kind: "frase" });
+    } else if (w.emph >= 1 && i - sentStart >= 2) {
+      cands.push({ t: Math.max(0, w.start - 0.05), score: 0.9 + w.emph * 0.5, kind: "enfase" });
+    }
+  });
+  for (const s of segs.slice(1)) cands.push({ t: s.out_start, score: 0.8, kind: "emenda" }); // esconde o pulo do jump cut
+  const chosen = [];
+  for (const c of [...cands].sort((a, b) => b.score - a.score)) {
+    if (c.t < 0.6 || c.t > total - 0.6) continue; // no gancho, punch-in cedo é bem-vindo
+    if (chosen.every((o) => Math.abs(o.t - c.t) >= minGap)) chosen.push(c);
+  }
+  chosen.sort((a, b) => a.t - b.t);
+  // nada de plano parado demais: completa com o melhor candidato do trecho (ou o meio dele)
+  const filled = [];
+  let prevT = 0;
+  for (const c of [...chosen, { t: total, kind: "fim" }]) {
+    while (c.t - prevT > maxGap) {
+      const mid = cands.filter((x) => x.t > prevT + minGap && x.t < Math.min(c.t - minGap, prevT + maxGap)).sort((a, b) => b.score - a.score)[0];
+      const add = mid || { t: prevT + Math.min(maxGap, (c.t - prevT) / 2), score: 0.5, kind: "ritmo" };
+      filled.push(add); prevT = add.t;
+    }
+    if (c.kind !== "fim") { filled.push(c); prevT = c.t; }
+  }
+  // zoom de cada plano pelo motivo da troca
+  const zoomFor = (c, prevZ) => {
+    if (baseZoom <= 1.01) return prevZ > 1.0 ? 1.0 : 1.05; // referência sem zoom: troca discreta só para esconder emendas
+    const punch = 1 + (baseZoom - 1) * clamp(0.7 + 0.2 * ((c.lead ?? c.score) - 1), 0.7, 1.2);
+    const tight = Math.min(1.4, 1 + (baseZoom - 1) * 1.4);
+    if (c.kind === "enfase") {
+      if (prevZ <= 1.02) return punch; // do aberto: punch-in na ênfase
+      return prevZ >= tight - 0.03 ? punch : tight; // ênfase sobre ênfase: aperta mais (ou alterna entre os dois níveis)
+    }
+    if (c.kind === "frase") return prevZ > 1.02 ? 1.0 : 1 + (baseZoom - 1) * 0.45; // ideia nova: volta ao aberto (ou muda de enquadramento se já estava aberto)
+    return prevZ > 1.02 ? 1.0 : 1 + (baseZoom - 1) * 0.5; // emenda/ritmo: troca leve para esconder o pulo
+  };
+  const firstEmph = words.length && words[0].emph >= 2.5;
+  const shots = [];
+  let z = firstEmph ? 1 + (baseZoom - 1) * 0.8 : 1.0;
+  const pts = [{ t: 0, kind: "inicio" }, ...filled];
+  pts.forEach((c, k) => {
+    if (k > 0) z = zoomFor(c, z);
+    const a = c.t, b = k + 1 < pts.length ? pts[k + 1].t : total;
+    if (b - a <= 0.01) return;
+    const longCalm = b - a > 3.5 && c.kind !== "enfase";
+    const z2 = ref.slow_zoom || longCalm ? z * 1.04 : z; // trecho longo e calmo: zoom lento
+    shots.push({ a, b, z, z2, kind: c.kind });
+    if (c.kind === "enfase") stats.enfases++;
+  });
+  return shots.length ? shots : [{ a: 0, b: total, z: 1, z2: 1, kind: "inicio" }];
 }
 
 function zoomAt(shots, t) {
@@ -1209,10 +1349,7 @@ const FIELDS = [
   ["captions.enabled", "Legendas ligadas", "check"],
   ["title.enabled", "Título fixo na tela", "check"],
   ["format.layout", "Enquadramento", "select", ["crop", "split", "fit_blur", "fit_black"]],
-  ["pacing.cuts_per_min", "Trocas de plano por minuto", "number", [0, 60, 0.5]],
-  ["pacing.punch_in_scale", "Zoom do punch-in", "number", [1, 1.6, 0.01]],
   ["pacing.jump_cuts", "Cortar pausas", "check"],
-  ["pacing.max_pause_s", "Pausa máxima (s)", "number", [0.05, 2, 0.05]],
   ["duration.min_s", "Duração mínima (s)", "number", [5, 180, 1]],
   ["duration.max_s", "Duração máxima (s)", "number", [5, 180, 1]],
 ];
@@ -1223,7 +1360,7 @@ function showProfile(p) {
   state.profile = p;
   $("#learned").hidden = false;
   const e = p.evidence || {}, chips = [];
-  if (e.edicao) chips.push(["Trocas/min", e.edicao.trocas_por_min], ["Punch-ins", e.edicao.punch_ins], ["Plano médio", `${e.edicao.plano_medio_s}s`]);
+  if (e.edicao) chips.push(["Ritmo base", `${e.edicao.trocas_por_min} trocas/min`], ["Punch-in base", `${p.pacing.punch_in_scale}×`], ["Plano médio", `${e.edicao.plano_medio_s}s`]);
   if (e.fala) chips.push(["Palavras/s", e.fala.palavras_por_s], ["Pausa p90", `${e.fala.pausa_p90_s}s`]);
   if (e.legendas?.animacao) chips.push(["Legenda", `${e.legendas.palavras_por_legenda} pal. · ${e.legendas.animacao}`], ["Fonte", e.legendas.fonte]);
   if (e.titulo) chips.push(["Título", `"${e.titulo.texto}"`]);
@@ -1283,6 +1420,7 @@ $("#go").onclick = async () => {
     if (key) { try { clips = await claudeSelect(tr, prof, n, key); } catch (e) { console.warn(e); setProgress(prog, 0.42, `Claude indisponível (${e.message}); usando o pontuador local`); await sleep(1500); } }
     if (!clips || !clips.length) clips = heuristicSelect(tr, prof, n);
     clips = clips.slice(0, n);
+    const energy = energyCurve(tr.audio);
     $("#results").innerHTML = clips.map((c, i) => `<div class="clip pending" id="clip${i}"><video controls playsinline></video><div class="info">
       <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="note">aguardando</small></div>
       <div class="title"></div><div class="why"></div></div></div>`).join("");
@@ -1290,7 +1428,7 @@ $("#go").onclick = async () => {
     const look = await makeVideo(file);
     for (let i = 0; i < clips.length; i++) {
       const c = clips[i], el = $(`#clip${i}`), base = 0.45 + (0.55 * i) / clips.length, span = 0.55 / clips.length;
-      const edit = buildEdit(tr.words, c.start, c.end, prof);
+      const edit = buildEdit(tr.words, c.start, c.end, prof, energy);
       let track = null;
       if (prof.format.layout === "crop" || prof.format.layout === "split") {
         track = await faceTrack(look, c.start, c.end, (f) => setProgress(prog, base + span * 0.15 * f, `corte ${i + 1}/${clips.length}: rastreando rostos`));
@@ -1300,7 +1438,10 @@ $("#go").onclick = async () => {
       const url = URL.createObjectURL(blob);
       el.classList.remove("pending");
       el.querySelector("video").src = url;
-      el.querySelector(".note").textContent = `${edit.duration.toFixed(1)}s · ${edit.shots.length} planos`;
+      el.querySelector(".note").textContent = `${edit.duration.toFixed(1)}s · ${edit.stats.trocas_por_min} trocas/min`;
+      const st = edit.stats, ed = document.createElement("div"); ed.className = "why";
+      ed.textContent = `Edição: ${edit.shots.length} planos (${st.enfases} punch-ins nas ênfases), ${st.pausas_cortadas} pausas cortadas, ${st.respiros} respiros mantidos` + (st.hesitacoes ? `, ${st.hesitacoes} hesitações removidas` : "") + ".";
+      el.querySelector(".info").insertBefore(ed, el.querySelector(".info").lastChild?.nextSibling || null);
       const a = document.createElement("a"); a.href = url; a.download = `corte_${String(i + 1).padStart(2, "0")}.${ext}`; a.textContent = `baixar ${ext.toUpperCase()}`;
       el.querySelector(".info").appendChild(a);
       window.cortaaiResults = (window.cortaaiResults || []).concat([{ blob, ext, clip: c, edit }]);

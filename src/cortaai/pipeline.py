@@ -10,6 +10,7 @@ from typing import Callable
 from .config import Settings, get_settings
 from .media import download, load_audio, probe, thumbnail
 from .selection import select_clips
+from .selection.candidates import _energy_curve
 from .render import render_clip
 from .style.profile import PRESETS, StyleProfile
 from .transcribe import transcribe
@@ -59,6 +60,7 @@ def make_clips(
     progress("escolhendo os melhores momentos", 0.3)
     audio = load_audio(src) if info.has_audio else None
     clips = select_clips(transcript, profile, n_clips, audio=audio, settings=settings, use_llm=use_llm)
+    energy = _energy_curve(audio)
 
     progress("rastreando rostos", 0.4)
     vis = None
@@ -72,7 +74,7 @@ def make_clips(
         progress(f"renderizando corte {k + 1}/{len(clips)}", base)
         out = out_dir / f"corte_{k + 1:02d}.mp4"
         meta = render_clip(
-            src, info, transcript, clip.start, clip.end, profile, out, vis=vis, title=clip.title, settings=settings,
+            src, info, transcript, clip.start, clip.end, profile, out, vis=vis, title=clip.title, settings=settings, energy=energy,
             progress=lambda f, base=base, span=span, k=k: progress(f"renderizando corte {k + 1}/{len(clips)}", base + span * f),
         )
         poster = thumbnail(out, out.with_suffix(".jpg"), t=min(1.0, clip.duration / 2))

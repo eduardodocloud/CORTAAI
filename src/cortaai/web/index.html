@@ -112,6 +112,7 @@ button.ghost { background: transparent; color: var(--text); border: 1px solid va
       </div>
       <div>
         <div class="chips" id="chips"></div>
+        <p class="sub" style="margin:0 0 14px;font-size:13px">Ritmo, força do zoom e pausas da referência são só a base: em cada corte eles se ajustam à fala.</p>
         <div class="form" id="form"></div>
         <div class="row" style="margin-top:14px"><button class="ghost" id="saveStyle">Salvar ajustes</button><small id="saveMsg" class="sub" style="margin:0"></small></div>
       </div>
@@ -221,10 +222,7 @@ const FIELDS = [
   ["captions.enabled", "Legendas ligadas", "check"],
   ["title.enabled", "Título fixo na tela", "check"],
   ["format.layout", "Enquadramento", "select", ["crop", "split", "fit_blur", "fit_black"]],
-  ["pacing.cuts_per_min", "Trocas de plano por minuto", "number", [0, 60, 0.5]],
-  ["pacing.punch_in_scale", "Zoom do punch-in", "number", [1, 1.6, 0.01]],
   ["pacing.jump_cuts", "Cortar pausas (jump cut)", "check"],
-  ["pacing.max_pause_s", "Pausa máxima (s)", "number", [0.05, 2, 0.05]],
   ["duration.min_s", "Duração mínima (s)", "number", [5, 180, 1]],
   ["duration.max_s", "Duração máxima (s)", "number", [5, 180, 1]],
 ];
@@ -343,6 +341,7 @@ function renderResults(cortes) {
         <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="sub" style="margin:0">${c.duracao_s.toFixed(1)}s · ${c.planos} planos</small></div>
         <div class="title">${c.title}</div>
         <div class="why">${c.reason}</div>
+        ${c.edicao ? `<div class="why">Edição: ${c.planos} planos (${c.edicao.enfases} punch-ins nas ênfases), ${c.edicao.pausas_cortadas} pausas cortadas, ${c.edicao.respiros} respiros mantidos${c.edicao.hesitacoes ? `, ${c.edicao.hesitacoes} hesitações removidas` : ""}.</div>` : ""}
         <a href="${c.url}" download>baixar MP4</a>
       </div>
     </div>`).join("");

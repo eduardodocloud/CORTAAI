@@ -212,6 +212,27 @@ def _split_on_silence(audio: np.ndarray, target: float) -> list[tuple[float, np.
     return chunks
 
 
+def refine_word_times(words: list[Word], audio: np.ndarray) -> list[Word]:
+    """O ASR costuma esticar o fim da palavra para dentro do silêncio seguinte. Apara início e fim
+    onde o áudio cai ao nível do fundo, para as pausas reais aparecerem (o jump cut depende disso)."""
+    if not words or audio is None or not len(audio):
+        return words
+    hop = SR // 100
+    n = len(audio) // hop
+    frames = audio[: n * hop].astype(np.float64).reshape(n, hop)
+    db = 10 * np.log10((frames ** 2).mean(axis=1) + 1e-10)
+    voiced = db > np.percentile(db[::5], 10) + 9
+    out = []
+    for w in words:
+        a, b = int(w.start * 100), min(n - 1, int(np.ceil(w.end * 100)))
+        while b > a + 6 and not voiced[b] and not voiced[b - 1]:
+            b -= 1
+        while a < b - 6 and not voiced[a] and not voiced[a + 1]:
+            a += 1
+        out.append(Word(w.text, a / 100, min(w.end, (b + 3) / 100)))
+    return out
+
+
 def _make_backend(settings: Settings) -> _Backend:
     order = {
         "auto": [FasterWhisperBackend, ParakeetBackend],
@@ -258,6 +279,7 @@ def transcribe(path: str | Path, cache_dir: str | Path | None = None, settings: 
     audio = load_audio(path, SR)
     backend = get_backend(settings)
     words, lang = backend.transcribe(audio, settings.language)
+    words = refine_word_times(words, audio)
     t = Transcript(words=words, language=lang or settings.language, duration=len(audio) / SR, backend=backend.name)
     if cache_file:
         cache_file.parent.mkdir(parents=True, exist_ok=True)

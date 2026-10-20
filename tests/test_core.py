@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from cortaai.render.captions import ass_color, build_ass, group_words
-from cortaai.render.edit import build_edit, keep_segments
+from cortaai.render.edit import build_edit, emphasis_scores
 from cortaai.selection.candidates import build_candidates, heuristic_select
 from cortaai.style.analyzer import TextBox, analyze_text_colors, merge_profiles
 from cortaai.style.profile import PRESETS, CaptionStyle, DurationStyle, PacingStyle, StyleProfile
@@ -43,29 +43,56 @@ def test_sentences_split_on_punctuation_and_long_pause():
 def test_jump_cuts_remove_long_pauses_and_remap_words():
     ws = words_from("um dois três quatro", gaps={2: 1.5})
     prof = StyleProfile(pacing=PacingStyle(jump_cuts=True, max_pause_s=0.3))
-    spans = keep_segments(ws, 0.0, ws[-1].end, prof)
-    assert len(spans) == 2
     edit = build_edit(ws, 0.0, ws[-1].end, prof)
-    assert edit.duration < ws[-1].end - 1.0  # a pausa de 1,5s sumiu (com folgas)
+    assert len(edit.segments) == 2
+    assert edit.duration < ws[-1].end - 1.0  # a pausa de 1,5s sumiu
     assert [w.text for w in edit.words] == ["um", "dois", "três", "quatro"]
-    assert all(b.start >= a.start for a, b in zip(edit.words, edit.words[1:]))
-    # tempo de saída volta para o tempo da fonte
     assert edit.src_time(edit.words[2].start) == pytest.approx(ws[2].start, abs=1e-6)
 
 
 def test_no_jump_cuts_keeps_everything():
     ws = words_from("um dois três quatro", gaps={2: 1.5})
-    prof = StyleProfile(pacing=PacingStyle(jump_cuts=False))
-    assert keep_segments(ws, 0.0, 5.0, prof) == [(0.0, 5.0)]
+    edit = build_edit(ws, 0.0, 5.0, StyleProfile(pacing=PacingStyle(jump_cuts=False)))
+    assert [(s.src_start, s.src_end) for s in edit.segments] == [(0.0, 5.0)]
 
 
-def test_shots_follow_reference_rhythm():
-    ws = words_from(" ".join(["palavra"] * 100), step=0.3)  # 30s de fala contínua
-    prof = StyleProfile(pacing=PacingStyle(cuts_per_min=20, punch_in_scale=1.2, jump_cuts=False))
-    edit = build_edit(ws, 0.0, 30.0, prof)
-    assert 8 <= len(edit.shots) <= 12  # ~10 trocas em 30s a 20/min
-    zooms = {round(s.zoom, 2) for s in edit.shots}
-    assert zooms == {1.0, 1.2}
+def test_pause_depends_on_context():
+    # pausa de 1s depois de pergunta vira respiro; a mesma pausa no meio da frase é cortada seca
+    q = words_from("Sabe qual é o segredo? Repetir todo dia", gaps={5: 1.0})
+    mid = words_from("Sabe qual é o segredo de repetir todo dia", gaps={5: 1.0})
+    prof = StyleProfile(pacing=PacingStyle(jump_cuts=True, max_pause_s=0.2))
+    eq, em = build_edit(q, 0, q[-1].end, prof), build_edit(mid, 0, mid[-1].end, prof)
+    gap_q = eq.words[5].start - eq.words[4].end
+    gap_m = em.words[5].start - em.words[4].end
+    assert gap_q >= 0.4 and gap_m <= 0.15
+    assert eq.stats["respiros"] == 1
+
+
+def test_isolated_filler_is_removed():
+    ws = words_from("então ééé a ideia", gaps={1: 0.4, 2: 0.4})
+    edit = build_edit(ws, 0, ws[-1].end, StyleProfile())
+    assert "ééé" not in [w.text for w in edit.words]
+    assert edit.stats["hesitacoes"] == 1
+
+
+def test_shots_follow_content_not_a_clock():
+    text = "Isso aqui é tranquilo e normal. Ninguém te conta a verdade sobre dinheiro! Agora a gente segue a conversa calma."
+    ws = words_from(text, step=0.3)
+    prof = StyleProfile(pacing=PacingStyle(cuts_per_min=20, punch_in_scale=1.2, jump_cuts=False, words_per_sec=3.3))
+    edit = build_edit(ws, 0.0, ws[-1].end, prof)
+    kinds = [s.kind for s in edit.shots]
+    # a frase com "Ninguém" (palavra forte) entra com punch-in; a frase calma seguinte volta ao aberto
+    i = next(k for k, s in enumerate(edit.shots) if abs(s.out_start - edit.words[6].start) < 0.2)
+    assert edit.shots[i].kind == "enfase" and edit.shots[i].zoom > 1.1
+    assert "frase" in kinds and any(s.zoom == 1.0 for s in edit.shots[i + 1:])
+    # toda troca muda o enquadramento (nenhuma troca invisível)
+    assert all(abs(a.zoom - b.zoom) > 0.01 for a, b in zip(edit.shots, edit.shots[1:]))
+
+
+def test_emphasis_scores_rank_content():
+    ws = words_from("o segredo é 90% simples!")
+    sc = emphasis_scores(ws, None)
+    assert sc[1] > sc[0] and sc[3] > sc[0] and sc[4] > sc[2]
 
 
 # --------------------------------------------------------------------------- legendas
