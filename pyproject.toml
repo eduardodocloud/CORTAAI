@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cortaai"
+version = "0.1.0"
+description = "Editor de cortes virais: transforma vídeos longos em shorts 9:16 imitando o estilo de um vídeo de referência."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    # rapidocr depende de opencv-python; a 5.x removeu o importador Caffe usado no detector de rostos
+    "opencv-python>=4.10,<5",
+    "rapidocr-onnxruntime>=1.2",
+    "soundfile>=0.12",
+    "pydantic>=2.6",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "yt-dlp>=2024.1.1",
+]
+
+[project.optional-dependencies]
+whisper = ["faster-whisper>=1.0"]
+parakeet = ["sherpa-onnx>=1.10"]
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+cortaai = "cortaai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cortaai = ["web/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: testes de integração que renderizam vídeo (precisam de modelos baixados)"]

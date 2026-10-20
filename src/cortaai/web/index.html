@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CortaAI</title>
+<style>
+@font-face { font-family: "Anton"; src: url("/fonts/Anton-Regular.ttf"); }
+@font-face { font-family: "Montserrat Black"; src: url("/fonts/Montserrat-Black.ttf"); }
+@font-face { font-family: "Montserrat ExtraBold"; src: url("/fonts/Montserrat-ExtraBold.ttf"); }
+@font-face { font-family: "Poppins Black"; src: url("/fonts/Poppins-Black.ttf"); }
+@font-face { font-family: "Bangers"; src: url("/fonts/Bangers-Regular.ttf"); }
+:root {
+  --bg: #0e0f13; --panel: #171920; --panel2: #1f222b; --line: #2b2f3a;
+  --text: #eceef3; --muted: #9aa0ad; --accent: #ffd400; --accent-ink: #1a1500;
+  --ok: #3ddc84; --err: #ff5d5d; --radius: 14px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font: 400 26px "Anton", sans-serif; letter-spacing: .5px; }
+header h1 span { color: var(--accent); }
+.pill { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
+.pill.on { color: var(--ok); border-color: #2a5c40; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; gap: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.card h2 { margin: 0 0 4px; font-size: 18px; }
+.card h2 b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; margin-right: 8px; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); padding: 7px 14px; border-radius: 99px; cursor: pointer; font: inherit; }
+.tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--muted); cursor: pointer; transition: .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); color: var(--text); }
+.drop strong { color: var(--text); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=number], select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; min-width: 0; }
+input[type=text] { flex: 1 1 260px; }
+input[type=color] { width: 42px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); padding: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 18px; font: 700 15px system-ui; cursor: pointer; }
+button.primary:disabled { opacity: .45; cursor: default; }
+button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; font: inherit; }
+.progress { margin-top: 14px; display: none; }
+.bar { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+.progress small { color: var(--muted); display: block; margin-top: 6px; }
+.learned { display: none; grid-template-columns: 260px 1fr; gap: 24px; margin-top: 18px; }
+@media (max-width: 760px) { .learned { grid-template-columns: 1fr; } }
+.phone { position: relative; aspect-ratio: 9/16; width: 100%; max-width: 260px; border-radius: 22px; overflow: hidden; background: #000; border: 1px solid var(--line); }
+.phone video { width: 100%; height: 100%; object-fit: cover; filter: blur(5px) brightness(.55); transform: scale(1.06); }
+.phone .cap, .phone .ttl { position: absolute; left: 6%; right: 6%; text-align: center; transform: translateY(-50%); line-height: 1.05; pointer-events: none; }
+.phone .ttl span { display: inline-block; padding: .25em .5em; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.chip small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.chip b { font-size: 15px; }
+.form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 16px; }
+.form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; margin-top: 18px; }
+.clip { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.clip video { width: 100%; aspect-ratio: 9/16; background: #000; display: block; }
+.clip .info { padding: 12px; display: grid; gap: 6px; }
+.clip .score { font: 400 22px "Anton"; color: var(--accent); }
+.clip .title { font-weight: 600; }
+.clip .why { color: var(--muted); font-size: 13px; }
+.clip a { color: var(--accent); font-size: 13px; }
+.err { color: var(--err); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CORTA<span>AI</span></h1>
+  <span id="ia" class="pill">verificando IA…</span>
+</header>
+<main>
+  <section class="card">
+    <h2><b>1</b>Estilo</h2>
+    <p class="sub">Envie um corte viral que você quer imitar. Eu meço legenda, cores, fonte, ritmo de cortes, zoom, pausas, título e tipo de gancho — e aplico tudo nos seus cortes.</p>
+    <div class="tabs">
+      <button class="tab active" data-tab="ref">Aprender de uma referência</button>
+      <button class="tab" data-tab="preset">Usar um preset</button>
+      <button class="tab" data-tab="saved">Estilos salvos</button>
+    </div>
+
+    <div data-pane="ref">
+      <label class="drop" id="refDrop">
+        <input id="refFiles" type="file" accept="video/*" multiple hidden>
+        <strong>Arraste aqui 1 ou mais vídeos de referência</strong><br>ou clique para escolher · com vários, eu combino o padrão deles
+      </label>
+      <div class="row" style="margin-top:12px">
+        <input id="refName" type="text" placeholder="Nome do estilo (ex.: cortes do Flow)">
+      </div>
+    </div>
+    <div data-pane="preset" class="hidden">
+      <div class="row"><select id="presetSel"></select></div>
+    </div>
+    <div data-pane="saved" class="hidden">
+      <div class="row"><select id="savedSel"><option value="">carregando…</option></select><button class="ghost" id="loadSaved">Abrir</button></div>
+    </div>
+
+    <div class="progress" id="refProg"><div class="bar"><i></i></div><small></small></div>
+
+    <div class="learned" id="learned">
+      <div>
+        <div class="phone" id="phone">
+          <video id="refVideo" muted loop playsinline autoplay></video>
+          <div class="ttl" id="pvTitle"><span>TÍTULO DO CORTE</span></div>
+          <div class="cap" id="pvCap"></div>
+        </div>
+      </div>
+      <div>
+        <div class="chips" id="chips"></div>
+        <div class="form" id="form"></div>
+        <div class="row" style="margin-top:14px"><button class="ghost" id="saveStyle">Salvar ajustes</button><small id="saveMsg" class="sub" style="margin:0"></small></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><b>2</b>Vídeo longo</h2>
+    <p class="sub">Podcast, live, entrevista, aula. Eu transcrevo, escolho os melhores momentos e renderizo em 9:16 no estilo acima.</p>
+    <label class="drop" id="srcDrop">
+      <input id="srcFile" type="file" accept="video/*" hidden>
+      <strong id="srcLabel">Arraste o vídeo longo aqui</strong><br>ou clique para escolher
+    </label>
+    <div class="row" style="margin-top:12px">
+      <input id="srcUrl" type="text" placeholder="…ou cole um link (YouTube, Twitch, Kick)">
+      <label class="row" style="gap:6px;color:var(--muted)">cortes <input id="qty" type="number" min="1" max="20" value="5" style="width:70px"></label>
+      <button class="primary" id="go">Gerar cortes</button>
+    </div>
+    <div class="progress" id="jobProg"><div class="bar"><i></i></div><small></small></div>
+    <div class="results" id="results"></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { mode: "ref", styleId: null, profile: null, preset: "padrao", presets: {} };
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+function setProgress(el, frac, msg, isErr = false) {
+  el.style.display = "block";
+  el.querySelector("i").style.width = `${Math.round((frac || 0) * 100)}%`;
+  const s = el.querySelector("small");
+  s.textContent = msg || "";
+  s.className = isErr ? "err" : "";
+}
+
+async function poll(url, onTick) {
+  for (;;) {
+    const d = await api(url);
+    onTick(d);
+    if (d.status === "pronto" || d.status === "erro") return d;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
+// ---------- abas
+document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+  document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== t.dataset.tab));
+  state.mode = t.dataset.tab;
+  if (state.mode === "preset") showProfile(state.presets[$("#presetSel").value], null);
+  if (state.mode === "saved") loadSavedList();
+});
+
+function wireDrop(drop, input, onFiles) {
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); onFiles(e.dataTransfer.files); };
+  input.onchange = () => onFiles(input.files);
+}
+
+// ---------- 1. estilo
+wireDrop($("#refDrop"), $("#refFiles"), async (files) => {
+  if (!files.length) return;
+  const fd = new FormData();
+  [...files].forEach((f) => fd.append("arquivos", f));
+  fd.append("nome", $("#refName").value || files[0].name.replace(/\.[^.]+$/, ""));
+  const prog = $("#refProg");
+  setProgress(prog, 0.02, "enviando…");
+  $("#learned").style.display = "none";
+  try {
+    const { id } = await api("/api/estilos", { method: "POST", body: fd });
+    const d = await poll(`/api/estilos/${id}`, (d) => setProgress(prog, d.progress, d.message, d.status === "erro"));
+    if (d.status === "pronto") { state.styleId = id; showProfile(d.profile, d); }
+  } catch (e) { setProgress(prog, 0, e.message, true); }
+});
+
+async function loadSavedList() {
+  const list = await api("/api/estilos");
+  const sel = $("#savedSel");
+  sel.innerHTML = list.length ? list.filter((s) => s.status === "pronto").map((s) => `<option value="${s.id}">${s.nome}</option>`).join("") : `<option value="">nenhum estilo ainda</option>`;
+}
+$("#loadSaved").onclick = async () => {
+  const id = $("#savedSel").value;
+  if (!id) return;
+  const d = await api(`/api/estilos/${id}`);
+  state.styleId = id;
+  showProfile(d.profile, d);
+};
+$("#presetSel").onchange = () => { state.styleId = null; showProfile(state.presets[$("#presetSel").value], null); };
+
+const FONTS = ["Montserrat Black", "Montserrat ExtraBold", "Anton", "Poppins Black", "Bangers"];
+const FIELDS = [
+  ["captions.font", "Fonte da legenda", "select", FONTS],
+  ["captions.words_per_caption", "Palavras por legenda", "number", [1, 8, 1]],
+  ["captions.position_y", "Altura da legenda (0 topo · 1 base)", "range", [0.1, 0.95, 0.01]],
+  ["captions.font_size", "Tamanho da fonte", "range", [0.03, 0.14, 0.002]],
+  ["captions.primary_color", "Cor do texto", "color"],
+  ["captions.highlight_color", "Cor do destaque", "color"],
+  ["captions.animation", "Animação", "select", ["karaoke", "pop", "word", "static"]],
+  ["captions.uppercase", "CAIXA ALTA", "check"],
+  ["captions.enabled", "Legendas ligadas", "check"],
+  ["title.enabled", "Título fixo na tela", "check"],
+  ["format.layout", "Enquadramento", "select", ["crop", "split", "fit_blur", "fit_black"]],
+  ["pacing.cuts_per_min", "Trocas de plano por minuto", "number", [0, 60, 0.5]],
+  ["pacing.punch_in_scale", "Zoom do punch-in", "number", [1, 1.6, 0.01]],
+  ["pacing.jump_cuts", "Cortar pausas (jump cut)", "check"],
+  ["pacing.max_pause_s", "Pausa máxima (s)", "number", [0.05, 2, 0.05]],
+  ["duration.min_s", "Duração mínima (s)", "number", [5, 180, 1]],
+  ["duration.max_s", "Duração máxima (s)", "number", [5, 180, 1]],
+];
+const get = (o, p) => p.split(".").reduce((a, k) => a?.[k], o);
+const set = (o, p, v) => { const ks = p.split("."); ks.slice(0, -1).reduce((a, k) => a[k], o)[ks.at(-1)] = v; };
+
+function showProfile(profile, meta) {
+  if (!profile) return;
+  state.profile = structuredClone(profile);
+  $("#learned").style.display = "grid";
+  $("#saveStyle").classList.toggle("hidden", !state.styleId);
+  const vid = $("#refVideo");
+  const src = meta?.referencias?.[0];
+  if (src) { vid.src = src; vid.poster = meta.poster || ""; } else { vid.removeAttribute("src"); vid.removeAttribute("poster"); }
+  renderChips(profile.evidence || {}, profile);
+  renderForm();
+  renderPreview();
+}
+
+function renderChips(ev, p) {
+  const e = ev.referencias ? ev.referencias[0] : ev;
+  const items = [];
+  if (e.edicao) items.push(["Trocas/min", e.edicao.trocas_por_min], ["Punch-ins", e.edicao.punch_ins], ["Plano médio", `${e.edicao.duracao_media_plano_s}s`]);
+  if (e.fala) items.push(["Palavras/s", e.fala.palavras_por_s], ["Pausa p90", `${e.fala.pausa_p90_s}s`]);
+  if (e.legendas?.animacao) items.push(["Legenda", `${e.legendas.palavras_por_legenda} pal. · ${e.legendas.animacao}`], ["Contorno", e.legendas.contorno ? "sim" : "não"]);
+  if (e.legendas?.titulo) items.push(["Título", `"${e.legendas.titulo.texto}"`]);
+  if (e.gancho) items.push(["Gancho", e.gancho.tipo]);
+  if (e.layout) items.push(["Layout", e.layout.tipo]);
+  if (!items.length) items.push(["Preset", p.name]);
+  $("#chips").innerHTML = items.map(([k, v]) => `<div class="chip"><small>${k}</small><b>${v}</b></div>`).join("");
+}
+
+function renderForm() {
+  const p = state.profile;
+  $("#form").innerHTML = FIELDS.map(([path, label, type, opt]) => {
+    const v = get(p, path);
+    if (type === "check") return `<label class="check"><input type="checkbox" data-p="${path}" ${v ? "checked" : ""}>${label}</label>`;
+    if (type === "select") return `<label>${label}<select data-p="${path}">${opt.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select></label>`;
+    if (type === "color") return `<label>${label}<input type="color" data-p="${path}" value="${(v || "#ffffff").slice(0, 7)}"></label>`;
+    const [mn, mx, st] = opt;
+    return `<label>${label}<input type="${type}" data-p="${path}" min="${mn}" max="${mx}" step="${st}" value="${v}"></label>`;
+  }).join("");
+  $("#form").querySelectorAll("[data-p]").forEach((el) => el.oninput = () => {
+    let v = el.type === "checkbox" ? el.checked : el.value;
+    if (el.type === "number" || el.type === "range") v = Number(v);
+    if (el.dataset.p === "captions.words_per_caption") v = Math.round(v);
+    set(state.profile, el.dataset.p, v);
+    renderPreview();
+  });
+}
+
+function renderPreview() {
+  const c = state.profile.captions, t = state.profile.title;
+  const phoneH = $("#phone").clientHeight || 462;
+  const cap = $("#pvCap");
+  const words = ["VOCÊ", "SABIA", "QUE", "NINGUÉM", "TE", "CONTA", "ISSO"].slice(0, Math.max(1, c.words_per_caption));
+  const fmt = (w) => c.uppercase ? w : w.toLowerCase();
+  const hlIdx = c.animation === "static" ? -1 : Math.min(1, words.length - 1);
+  cap.style.display = c.enabled ? "block" : "none";
+  cap.style.top = `${c.position_y * 100}%`;
+  cap.style.font = `400 ${c.font_size * phoneH}px "${c.font}"`;
+  const stroke = Math.max(0, c.outline_width * c.font_size * phoneH);
+  cap.style.webkitTextStroke = "";
+  cap.style.textShadow = stroke ? `0 0 ${stroke}px #000, 0 0 ${stroke}px #000, 0 0 ${stroke}px #000` : "none";
+  cap.innerHTML = (c.animation === "word" ? [words[0]] : words).map((w, i) =>
+    `<span style="color:${i === hlIdx || c.animation === "word" ? c.highlight_color : c.primary_color};${i === hlIdx && c.animation === "pop" ? "font-size:118%" : ""}">${fmt(w)}</span>`).join(" ");
+  const tt = $("#pvTitle");
+  tt.style.display = t.enabled ? "block" : "none";
+  tt.style.top = `${t.position_y * 100}%`;
+  const span = tt.querySelector("span");
+  span.style.font = `400 ${t.font_size * phoneH}px "${t.font || c.font}"`;
+  span.style.color = t.text_color;
+  span.style.background = t.box_color.length > 7 ? "transparent" : t.box_color;
+}
+
+$("#saveStyle").onclick = async () => {
+  if (!state.styleId) return;
+  await api(`/api/estilos/${state.styleId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state.profile) });
+  $("#saveMsg").textContent = "ajustes salvos";
+  setTimeout(() => $("#saveMsg").textContent = "", 2500);
+};
+
+// ---------- 2. vídeo longo
+let srcFile = null;
+wireDrop($("#srcDrop"), $("#srcFile"), (files) => { srcFile = files[0]; $("#srcLabel").textContent = srcFile ? srcFile.name : "Arraste o vídeo longo aqui"; });
+
+$("#go").onclick = async () => {
+  const fd = new FormData();
+  if (srcFile) fd.append("arquivo", srcFile);
+  fd.append("url", $("#srcUrl").value);
+  fd.append("quantidade", $("#qty").value);
+  if (state.styleId && state.mode !== "preset") {
+    // salva ajustes feitos na tela antes de cortar
+    await api(`/api/estilos/${state.styleId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state.profile) });
+    fd.append("estilo_id", state.styleId);
+  } else {
+    fd.append("preset", $("#presetSel").value || "padrao");
+  }
+  const prog = $("#jobProg");
+  $("#go").disabled = true;
+  $("#results").innerHTML = "";
+  setProgress(prog, 0.01, "enviando…");
+  try {
+    const { id } = await api("/api/cortes", { method: "POST", body: fd });
+    const d = await poll(`/api/cortes/${id}`, (d) => setProgress(prog, d.progress, d.message, d.status === "erro"));
+    if (d.status === "pronto") renderResults(d.cortes);
+  } catch (e) { setProgress(prog, 0, e.message, true); }
+  $("#go").disabled = false;
+};
+
+function renderResults(cortes) {
+  $("#results").innerHTML = cortes.map((c) => `
+    <div class="clip">
+      <video src="${c.url}" poster="${c.poster || ""}" controls preload="metadata" playsinline></video>
+      <div class="info">
+        <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="sub" style="margin:0">${c.duracao_s.toFixed(1)}s · ${c.planos} planos</small></div>
+        <div class="title">${c.title}</div>
+        <div class="why">${c.reason}</div>
+        <a href="${c.url}" download>baixar MP4</a>
+      </div>
+    </div>`).join("");
+}
+
+// ---------- início
+(async () => {
+  const st = await api("/api/status").catch(() => ({}));
+  const ia = $("#ia");
+  ia.textContent = st.ia ? `IA: ${st.modelo_ia}` : "IA: pontuador local (defina ANTHROPIC_API_KEY p/ usar o Claude)";
+  ia.classList.toggle("on", !!st.ia);
+  state.presets = await api("/api/presets");
+  $("#presetSel").innerHTML = Object.keys(state.presets).map((k) => `<option>${k}</option>`).join("");
+})();
+</script>
+</body>
+</html>
