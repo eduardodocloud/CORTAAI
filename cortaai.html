@@ -1,0 +1,1318 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CortaAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Montserrat:wght@800;900&family=Poppins:wght@900&family=Inter+Tight:wght@400;600;700&display=swap">
+<style>
+/* CortaAI local: tudo roda no navegador. Layout: duas etapas empilhadas (estilo -> vídeo longo). */
+:root {
+  --bg: #0f0f13; --panel: #18181f; --panel2: #202029; --line: #2d2d39;
+  --text: #eeedf2; --muted: #9c9aa8; --accent: #ffd60a; --accent-ink: #18150a;
+  --ok: #3ddc84; --err: #ff6b6b;
+  --display: "Anton", Impact, "Arial Narrow", sans-serif;
+  --body: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--body); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 16px max(16px, 3vw); border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font: 400 28px var(--display); letter-spacing: .5px; }
+header h1 span { color: var(--accent); }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
+.pill.on { color: var(--ok); border-color: #2b5d41; }
+.pill.warn { color: #ffb347; border-color: #6b4a1d; }
+main { max-width: 1180px; margin: 0 auto; padding: 22px max(16px, 3vw) 80px; display: grid; gap: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.card h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.card h2 b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; }
+.sub { color: var(--muted); margin: 0; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); padding: 7px 14px; border-radius: 99px; cursor: pointer; font: inherit; }
+.tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: 14px; padding: 26px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); color: var(--text); }
+.drop strong { color: var(--text); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=password], input[type=number], select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; min-width: 0; }
+input[type=color] { width: 42px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); padding: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 18px; font: 700 15px var(--body); cursor: pointer; }
+button.primary:disabled { opacity: .45; cursor: default; }
+button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.progress { display: grid; gap: 6px; }
+.bar { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.progress small { color: var(--muted); }
+.progress small.err { color: var(--err); }
+.learned { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; }
+@media (max-width: 760px) { .learned { grid-template-columns: 1fr; } }
+#preview { width: 100%; max-width: 250px; aspect-ratio: 9 / 16; border-radius: 20px; border: 1px solid var(--line); background: #000; display: block; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; }
+.chip small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.chip b { font-size: 14px; }
+.form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 16px; }
+.form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+details { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+details summary { cursor: pointer; color: var(--muted); }
+details .row { margin-top: 10px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.clip { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: grid; }
+.clip video { width: 100%; aspect-ratio: 9 / 16; background: #000; display: block; }
+.clip .info { padding: 12px; display: grid; gap: 6px; }
+.clip .score { font: 400 24px var(--display); color: var(--accent); }
+.clip .title { font-weight: 600; }
+.clip .why { color: var(--muted); font-size: 13px; }
+.clip a { color: var(--accent); font-size: 14px; font-weight: 600; }
+.clip.pending { opacity: .55; }
+.note { font-size: 13px; color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CORTA<span>AI</span></h1>
+  <div class="pills" id="caps"></div>
+</header>
+<main>
+  <section class="card">
+    <h2><b>1</b>Estilo</h2>
+    <p class="sub">Envie um corte viral que você quer imitar. Eu meço legenda, cores, fonte, ritmo de cortes, zoom, pausas, título e tipo de gancho, e aplico tudo nos seus cortes.</p>
+    <div class="tabs">
+      <button class="tab active" data-tab="ref">Aprender de uma referência</button>
+      <button class="tab" data-tab="preset">Usar um preset</button>
+    </div>
+    <div data-pane="ref">
+      <label class="drop" id="refDrop"><input id="refFile" type="file" accept="video/*" hidden>
+        <strong>Arraste aqui o vídeo de referência</strong><br>ou clique para escolher (analiso até 90 s)</label>
+    </div>
+    <div data-pane="preset" hidden>
+      <div class="row"><select id="presetSel"></select></div>
+    </div>
+    <div class="progress" id="refProg" hidden><div class="bar"><i></i></div><small></small></div>
+    <div class="learned" id="learned" hidden>
+      <canvas id="preview" width="540" height="960"></canvas>
+      <div style="display:grid;gap:14px;min-width:0">
+        <div class="chips" id="chips"></div>
+        <div class="form" id="form"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><b>2</b>Vídeo longo</h2>
+    <p class="sub">Podcast, live, entrevista, aula. Eu transcrevo, escolho os melhores momentos e gero os cortes 9:16 no estilo acima.</p>
+    <label class="drop" id="srcDrop"><input id="srcFile" type="file" accept="video/*" hidden>
+      <strong id="srcLabel">Arraste o vídeo longo aqui</strong><br>ou clique para escolher</label>
+    <div class="row">
+      <label class="row" style="gap:6px;color:var(--muted)">cortes <input id="qty" type="number" min="1" max="15" value="4" style="width:70px"></label>
+      <label class="row" style="gap:6px;color:var(--muted)">transcrição
+        <select id="quality"><option value="base">rápida</option><option value="small">precisa</option></select></label>
+      <label class="row" style="gap:6px;color:var(--muted)">idioma
+        <select id="lang"><option value="portuguese">português</option><option value="english">inglês</option><option value="spanish">espanhol</option><option value="">detectar</option></select></label>
+      <button class="primary" id="go" disabled>Gerar cortes</button>
+    </div>
+    <details>
+      <summary>Usar o Claude para escolher os momentos (opcional)</summary>
+      <div class="row">
+        <input id="apiKey" type="password" placeholder="sk-ant-... (fica salvo só neste navegador)" style="flex:1 1 320px">
+        <button class="ghost" id="saveKey">Salvar</button>
+      </div>
+      <p class="note">Sem chave, um pontuador local escolhe os trechos (gancho, energia da voz, frase completa, duração).</p>
+    </details>
+    <p class="note">Os cortes são gravados em tempo real: um corte de 30 s leva cerca de 30 s. Deixe esta aba aberta e visível enquanto gera.</p>
+    <div class="progress" id="jobProg" hidden><div class="bar"><i></i></div><small></small></div>
+    <div class="results" id="results"></div>
+  </section>
+</main>
+
+<script type="module">
+// ============================================================================ util
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const median = (a) => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const percentile = (a, p) => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))]; };
+const norm = (s) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9% ]+/g, " ").replace(/\s+/g, " ").trim();
+const hex = ([r, g, b]) => "#" + [r, g, b].map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+
+// window.CORTAAI_CDN permite apontar as bibliotecas para outro servidor (ex.: cópia local)
+const CDN = Object.assign({
+  transformers: "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1/dist/transformers.min.js",
+  mediapipe: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21",
+  faceModel: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+  tesseract: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+  tesseractOptions: {},
+}, window.CORTAAI_CDN || {});
+
+function setProgress(el, frac, msg, isErr = false) {
+  el.hidden = false;
+  el.querySelector("i").style.width = `${Math.round(clamp(frac || 0, 0, 1) * 100)}%`;
+  const s = el.querySelector("small");
+  s.textContent = msg || "";
+  s.className = isErr ? "err" : "";
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error(`não consegui carregar ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+// ============================================================================ mídia
+function makeVideo(file) {
+  const v = document.createElement("video");
+  v.muted = true; v.playsInline = true; v.preload = "auto"; v.crossOrigin = "anonymous";
+  v.src = URL.createObjectURL(file);
+  return new Promise((res, rej) => {
+    v.onloadeddata = () => res(v);
+    v.onerror = () => rej(new Error("o navegador não conseguiu abrir este vídeo (tente MP4 H.264)"));
+  });
+}
+
+function seek(v, t) {
+  return new Promise((res) => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; v.removeEventListener("seeked", fin); res(); } };
+    v.addEventListener("seeked", fin);
+    v.currentTime = clamp(t, 0, Math.max(0, v.duration - 0.05));
+    setTimeout(fin, 3000);
+  });
+}
+
+function frameCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+function grab(v, w) {
+  const h = Math.round((v.videoHeight / v.videoWidth) * w / 2) * 2;
+  const c = frameCanvas(w, h);
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(v, 0, 0, w, h);
+  return { canvas: c, img: ctx.getImageData(0, 0, w, h), w, h };
+}
+
+function toGray(img) {
+  const d = img.data, g = new Float32Array(img.width * img.height);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+  return g;
+}
+
+async function decodeAudio16k(file) {
+  const buf = await file.arrayBuffer();
+  const tmp = new OfflineAudioContext(1, 16000, 16000);
+  const decoded = await tmp.decodeAudioData(buf);
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+  const src = off.createBufferSource();
+  src.buffer = decoded; src.connect(off.destination); src.start();
+  const out = await off.startRendering();
+  return out.getChannelData(0);
+}
+
+// ============================================================================ transcrição (Whisper no navegador)
+const SENT_END = /[.!?…]+["'”»)]*$/;
+let transcriberCache = {};
+
+async function getTranscriber(size, onProg) {
+  const key = size;
+  if (transcriberCache[key]) return transcriberCache[key];
+  const T = await import(CDN.transformers);
+  const device = navigator.gpu ? "webgpu" : "wasm";
+  const dtype = device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
+  const progress_callback = (p) => { if (p.status === "progress" && onProg) onProg(`baixando modelo de transcrição (${p.file}) ${Math.round(p.progress)}%`); };
+  // modelo com atenções expostas = tempo por palavra; senão cai para tempo por trecho
+  for (const [id, word] of [[`onnx-community/whisper-${size}_timestamped`, true], [`Xenova/whisper-${size}`, false]]) {
+    try {
+      const pipe = await T.pipeline("automatic-speech-recognition", id, { device, dtype, progress_callback });
+      transcriberCache[key] = { pipe, word, id };
+      return transcriberCache[key];
+    } catch (e) { console.warn("modelo indisponível", id, e); }
+  }
+  throw new Error("não consegui carregar o modelo de transcrição (verifique a internet)");
+}
+
+function splitOnSilence(audio, target = 28) {
+  const SR = 16000, n = audio.length;
+  if (n <= target * SR * 1.2) return [[0, audio]];
+  const win = 800, rms = new Float32Array(Math.ceil(n / win));
+  for (let i = 0; i < rms.length; i++) { let s = 0; const a = i * win, b = Math.min(n, a + win); for (let j = a; j < b; j++) s += audio[j] * audio[j]; rms[i] = s / (b - a); }
+  const chunks = []; let pos = 0;
+  while (pos < n) {
+    const ideal = pos + target * SR;
+    if (ideal >= n - 4 * SR) { chunks.push([pos / SR, audio.subarray(pos)]); break; }
+    const lo = Math.floor((ideal - 4 * SR) / win), hi = Math.floor(Math.min(n, ideal + 1 * SR) / win);
+    let best = lo; for (let i = lo; i < hi; i++) if (rms[i] < rms[best]) best = i;
+    const cut = best * win;
+    chunks.push([pos / SR, audio.subarray(pos, cut)]); pos = cut;
+  }
+  return chunks;
+}
+
+async function transcribe(file, opts, onProg) {
+  if (window.cortaaiTranscriptOverride) {
+    const r = await window.cortaaiTranscriptOverride(file);
+    if (r) return r;
+  }
+  onProg(0.01, "lendo o áudio");
+  const audio = await decodeAudio16k(file);
+  const tr = await getTranscriber(opts.size, (m) => onProg(0.02, m));
+  const words = [];
+  const chunks = splitOnSilence(audio);
+  for (let k = 0; k < chunks.length; k++) {
+    const [offset, chunk] = chunks[k];
+    onProg(0.05 + 0.95 * (k / chunks.length), `transcrevendo ${Math.round(offset / 60)}:${String(Math.round(offset % 60)).padStart(2, "0")} de ${Math.round(audio.length / 16000 / 60)} min`);
+    const gen = { task: "transcribe", return_timestamps: tr.word ? "word" : true };
+    if (opts.language) gen.language = opts.language;
+    const out = await tr.pipe(chunk, gen);
+    for (const c of out.chunks || []) {
+      const [s, e] = c.timestamp;
+      const end = e ?? s + 0.3;
+      if (tr.word) {
+        const t = c.text.trim();
+        if (t) words.push({ text: t, start: offset + s, end: offset + end });
+      } else {
+        // só temos tempo do trecho: distribui as palavras pelo tamanho
+        const ws = c.text.trim().split(/\s+/).filter(Boolean);
+        const tot = ws.reduce((a, w) => a + w.length + 2, 0);
+        let acc = 0;
+        for (const w of ws) { const a = offset + s + (acc / tot) * (end - s); acc += w.length + 2; words.push({ text: w, start: a, end: offset + s + (acc / tot) * (end - s) }); }
+      }
+    }
+    await yieldUI();
+  }
+  return { words, duration: audio.length / 16000, audio };
+}
+
+function sentences(words, maxGap = 1.2, maxWords = 40) {
+  const out = []; let cur = [];
+  words.forEach((w, i) => {
+    cur.push(w);
+    const nxt = words[i + 1];
+    const gap = nxt ? nxt.start - w.end : 0;
+    if (!nxt || SENT_END.test(w.text) || gap > maxGap || cur.length >= maxWords) {
+      out.push({ index: out.length, words: cur, start: cur[0].start, end: cur[cur.length - 1].end, text: cur.map((x) => x.text).join(" ") });
+      cur = [];
+    }
+  });
+  return out;
+}
+
+// ============================================================================ rostos (MediaPipe)
+let faceDetector = null;
+async function getFaceDetector() {
+  if (faceDetector) return faceDetector;
+  const mp = await import(`${CDN.mediapipe}/vision_bundle.mjs`);
+  const fileset = await mp.FilesetResolver.forVisionTasks(`${CDN.mediapipe}/wasm`);
+  faceDetector = await mp.FaceDetector.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: CDN.faceModel }, runningMode: "IMAGE", minDetectionConfidence: 0.5,
+  });
+  return faceDetector;
+}
+
+function detectFaces(det, canvas) {
+  const r = det.detect(canvas);
+  return (r.detections || []).map((d) => {
+    const b = d.boundingBox;
+    return { x: b.originX / canvas.width, y: b.originY / canvas.height, w: b.width / canvas.width, h: b.height / canvas.height,
+      cx: (b.originX + b.width / 2) / canvas.width, cy: (b.originY + b.height / 2) / canvas.height };
+  }).filter((f) => f.h > 0.03);
+}
+
+// mesmo rosto ampliado entre dois frames? (punch-in) — NCC com busca de escala e posição
+function faceZoom(ga, gb, W, H, fa, fb) {
+  const ratio = fb.h / fa.h;
+  if (Math.abs(ratio - 1) < 0.06) return null;
+  const bw = Math.round(fb.w * W * 0.9), bh = Math.round(fb.h * H * 0.9);
+  if (bw < 10 || bh < 10) return null;
+  const bx = fb.cx * W - bw / 2, by = fb.cy * H - bh / 2;
+  const T = new Float32Array(bw * bh);
+  let mt = 0;
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+    const v = gb[clamp(Math.round(by + y), 0, H - 1) * W + clamp(Math.round(bx + x), 0, W - 1)]; T[y * bw + x] = v; mt += v;
+  }
+  mt /= T.length; let st = 0;
+  for (let i = 0; i < T.length; i++) { T[i] -= mt; st += T[i] * T[i]; }
+  st = Math.sqrt(st) + 1e-6;
+  let best = { score: 0, s: 1 };
+  const step = Math.max(1, Math.round(bw / 24));
+  let tn = 0; for (let y = 0; y < bh; y += step) for (let x = 0; x < bw; x += step) tn += T[y * bw + x] ** 2;
+  for (let k = 0; k < 9; k++) {
+    const s = ratio * (0.85 + k * (0.33 / 8));
+    const rad = Math.round((0.3 * bw) / s);
+    for (let dy = -rad; dy <= rad; dy += 2) for (let dx = -rad; dx <= rad; dx += 2) {
+      let sum = 0, sum2 = 0, cross = 0, n = 0;
+      for (let y = 0; y < bh; y += step) for (let x = 0; x < bw; x += step) {
+        const px = fa.cx * W + dx + (x - bw / 2) / s, py = fa.cy * H + dy + (y - bh / 2) / s;
+        const v = ga[clamp(Math.round(py), 0, H - 1) * W + clamp(Math.round(px), 0, W - 1)];
+        sum += v; sum2 += v * v; cross += v * T[y * bw + x]; n++;
+      }
+      const mean = sum / n, sd = Math.sqrt(Math.max(1e-6, sum2 - n * mean * mean));
+      // T já tem média zero; correlação usando os pontos amostrados
+      const score = cross / (sd * Math.sqrt(tn) + 1e-6);
+      if (score > best.score) best = { score, s };
+    }
+  }
+  return best.score > 0.7 && Math.abs(best.s - 1) >= 0.06 ? { scale: best.s, score: best.score } : null;
+}
+
+// ============================================================================ perfil de estilo
+const FONTS = {
+  "Anton": ["400", "Anton"], "Montserrat Black": ["900", "Montserrat"], "Montserrat ExtraBold": ["800", "Montserrat"],
+  "Poppins Black": ["900", "Poppins"], "Bangers": ["400", "Bangers"],
+};
+const fontCss = (name, px) => { const [w, f] = FONTS[name] || FONTS["Montserrat Black"]; return `${w} ${px}px "${f}"`; };
+
+function baseProfile() {
+  return {
+    name: "padrão",
+    format: { width: 1080, height: 1920, fps: 30, layout: "crop" },
+    duration: { min_s: 20, max_s: 60, target_s: 35 },
+    pacing: { cuts_per_min: 14, punch_in_scale: 1.15, slow_zoom: false, jump_cuts: true, max_pause_s: 0.35, words_per_sec: 2.8 },
+    // size: tamanho da fonte (em) como fração da altura; outline_width: fração do tamanho
+    captions: { enabled: true, font: "Montserrat Black", size: 0.05, position_y: 0.7, words_per_caption: 3, uppercase: true,
+      primary_color: "#FFFFFF", highlight_color: "#FFE600", outline_color: "#000000", outline_width: 0.1, shadow: true,
+      animation: "karaoke", background_box: false },
+    title: { enabled: false, font: "Montserrat Black", size: 0.032, position_y: 0.12, uppercase: true, text_color: "#000000", box_color: "#FFFFFF" },
+    content: { hook_type: "any", guidance: "Escolha trechos com gancho forte nos primeiros 3 segundos, uma ideia completa e final com conclusão ou virada." },
+    evidence: {},
+  };
+}
+const merge = (a, b) => { const o = structuredClone(a); for (const k in b) o[k] = typeof b[k] === "object" && !Array.isArray(b[k]) ? { ...o[k], ...b[k] } : b[k]; return o; };
+const PRESETS = {
+  "padrão": baseProfile(),
+  "podcast BR": merge(baseProfile(), { name: "podcast BR", title: { enabled: true }, captions: { highlight_color: "#00FF5A", position_y: 0.68 }, pacing: { cuts_per_min: 12 } }),
+  "hormozi": merge(baseProfile(), { name: "hormozi", captions: { font: "Anton", size: 0.068, words_per_caption: 2, animation: "pop", position_y: 0.62 }, pacing: { cuts_per_min: 24, punch_in_scale: 1.2, max_pause_s: 0.2 } }),
+  "minimalista": merge(baseProfile(), { name: "minimalista", format: { layout: "fit_blur" }, captions: { font: "Poppins Black", uppercase: false, words_per_caption: 5, animation: "static", size: 0.036, position_y: 0.78, outline_width: 0.08 }, pacing: { cuts_per_min: 4, jump_cuts: false, punch_in_scale: 1.0 } }),
+};
+
+// ============================================================================ análise da referência
+const QUESTION_START = /^\s*(por que|porque|pq|como|qual|quais|quem|quando|onde|o que|quanto|quantos|voc[eê] sabia|sabia que|why|how|what|who|when|where|did you know)\b/i;
+const HOOK_GUIDANCE = {
+  question: "Comece o corte com uma PERGUNTA provocativa que gere curiosidade.",
+  number: "Comece o corte com um NÚMERO ou dado concreto e surpreendente.",
+  story: "Comece o corte no início de uma HISTÓRIA pessoal, com tensão logo de cara.",
+  statement: "Comece o corte com uma AFIRMAÇÃO forte e direta, sem introdução.",
+  any: "Comece o corte com um gancho forte nos primeiros 3 segundos.",
+};
+// altura da caixa do OCR (letra maiúscula preenchida) / tamanho em; largura média por caractere / altura
+// (calibrado renderizando cada fonte no canvas e lendo com o mesmo OCR)
+const CAP_RATIO = { "Anton": 0.87, "Montserrat Black": 0.72, "Poppins Black": 0.72, "Bangers": 0.78 };
+
+function hookType(sents) {
+  if (!sents.length) return "any";
+  const first = sents[0].text;
+  if (first.includes("?") || QUESTION_START.test(first.toLowerCase())) return "question";
+  if (/\d/.test(first)) return "number";
+  if (/\b(eu|quando|um dia|uma vez)\b/i.test(first)) return "story";
+  return "statement";
+}
+
+let tessWorker = null;
+async function getOCR(onProg) {
+  if (tessWorker) return tessWorker;
+  if (!window.Tesseract) await loadScript(CDN.tesseract);
+  onProg?.("carregando leitor de texto (OCR)");
+  tessWorker = await window.Tesseract.createWorker(["por", "eng"], 1, CDN.tesseractOptions);
+  await tessWorker.setParameters({ tessedit_pageseg_mode: "11" });
+  return tessWorker;
+}
+
+function rgb2hsv(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 30; if (h < 0) h += 180; }
+  return [h, mx ? (d / mx) * 255 : 0, mx];
+}
+
+function dilate(mask, w, h, k) {
+  const r = k >> 1, tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let v = 0; for (let d = -r; d <= r && !v; d++) { const xx = x + d; if (xx >= 0 && xx < w && mask[y * w + xx]) v = 1; } tmp[y * w + x] = v; }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let v = 0; for (let d = -r; d <= r && !v; d++) { const yy = y + d; if (yy >= 0 && yy < h && tmp[yy * w + x]) v = 1; } out[y * w + x] = v; }
+  return out;
+}
+
+function distTransform(mask, w, h) {
+  // chamfer 3-4 (unidades /3 ~ pixels) dentro da máscara
+  const INF = 1e9, d = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? INF : 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (!d[i]) continue;
+    if (x > 0) d[i] = Math.min(d[i], d[i - 1] + 3); if (y > 0) d[i] = Math.min(d[i], d[i - w] + 3);
+    if (x > 0 && y > 0) d[i] = Math.min(d[i], d[i - w - 1] + 4); if (x < w - 1 && y > 0) d[i] = Math.min(d[i], d[i - w + 1] + 4); }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) { const i = y * w + x; if (!d[i]) continue;
+    if (x < w - 1) d[i] = Math.min(d[i], d[i + 1] + 3); if (y < h - 1) d[i] = Math.min(d[i], d[i + w] + 3);
+    if (x < w - 1 && y < h - 1) d[i] = Math.min(d[i], d[i + w + 1] + 4); if (x > 0 && y < h - 1) d[i] = Math.min(d[i], d[i + w - 1] + 4); }
+  for (let i = 0; i < d.length; i++) d[i] = d[i] >= INF ? 0 : d[i] / 3;
+  return d;
+}
+
+// cor do texto de uma caixa: só pixels claros/coloridos colados no contorno escuro
+function textColors(img, box) {
+  const W = img.width, H = img.height, D = img.data;
+  const x0 = clamp(Math.floor(box.x0), 0, W - 1), y0 = clamp(Math.floor(box.y0), 0, H - 1);
+  const x1 = clamp(Math.ceil(box.x1), x0 + 1, W), y1 = clamp(Math.ceil(box.y1), y0 + 1, H);
+  const w = x1 - x0, h = y1 - y0, n = w * h;
+  const hsv = new Array(n), rgb = new Array(n), dark = new Uint8Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const j = ((y0 + y) * W + x0 + x) * 4, i = y * w + x;
+    rgb[i] = [D[j], D[j + 1], D[j + 2]]; hsv[i] = rgb2hsv(D[j], D[j + 1], D[j + 2]);
+    dark[i] = hsv[i][2] < 50 ? 1 : 0;
+  }
+  const darkFrac = dark.reduce((a, b) => a + b, 0) / n;
+  const k = Math.max(3, Math.round(h * 0.12)) | 1;
+  const near = darkFrac >= 0.05 ? dilate(dark, w, h, k) : null;
+  const whites = [], colored = [], bright = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const [hh, s, v] = hsv[i];
+    if (dark[i] || v < 50 || (near && !near[i])) continue;
+    if (v > 150) bright[i] = 1;
+    if (s < 50 && v > 190) whites.push(rgb[i]);
+    else if (s > 120 && v > 150) colored.push([...rgb[i], hh]);
+  }
+  let stroke = 0;
+  if (near) {
+    const ring = dilate(bright, w, h, k), dt = distTransform(dark, w, h), vals = [];
+    for (let i = 0; i < n; i++) if (dark[i] && ring[i]) vals.push(dt[i]);
+    if (vals.length > 30) stroke = 2 * percentile(vals, 90);
+  }
+  const thr = Math.max(15, 0.02 * n);
+  const med3 = (arr) => [0, 1, 2].map((c) => median(arr.map((p) => p[c])));
+  let accent = null;
+  if (colored.length > thr) {
+    const bins = new Array(18).fill(0); colored.forEach((p) => bins[Math.min(17, Math.floor(p[3] / 10))]++);
+    const top = bins.indexOf(Math.max(...bins));
+    accent = med3(colored.filter((p) => Math.min(17, Math.floor(p[3] / 10)) === top));
+  }
+  return { white: whites.length > thr ? med3(whites) : null, accent, darkFrac, stroke, outline: darkFrac >= 0.08 };
+}
+
+function boxBehind(img, box) {
+  // caixa de fundo: borda do texto uniforme e diferente das laterais da tela na mesma altura
+  const W = img.width, H = img.height, D = img.data;
+  const px = (x, y) => { const j = (clamp(Math.round(y), 0, H - 1) * W + clamp(Math.round(x), 0, W - 1)) * 4; return [D[j], D[j + 1], D[j + 2]]; };
+  const side = [];
+  for (let y = box.y0; y < box.y1; y += 2) { side.push(px(4, y)); side.push(px(W - 5, y)); }
+  const sideCol = [0, 1, 2].map((c) => median(side.map((p) => p[c])));
+  for (const pad of [0.02, 0.08]) {
+    const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+    const xa = box.x0 - bw * pad, xb = box.x1 + bw * pad, ya = box.y0 - bh * pad * 3, yb = box.y1 + bh * pad * 3;
+    const border = [];
+    for (let x = xa; x <= xb; x += 2) { border.push(px(x, ya)); border.push(px(x, yb)); }
+    for (let y = ya; y <= yb; y += 2) { border.push(px(xa, y)); border.push(px(xb, y)); }
+    const col = [0, 1, 2].map((c) => median(border.map((p) => p[c])));
+    const uniform = border.filter((p) => Math.abs(p[0] - col[0]) + Math.abs(p[1] - col[1]) + Math.abs(p[2] - col[2]) < 90).length / border.length > 0.85;
+    const diff = (Math.abs(col[0] - sideCol[0]) + Math.abs(col[1] - sideCol[1]) + Math.abs(col[2] - sideCol[2])) / 3;
+    if (uniform && diff > 35) return col;
+  }
+  return null;
+}
+
+// texto de legenda (claro com contorno) vira preto sobre branco para o OCR
+function captionMask(img) {
+  const W = img.width, H = img.height, D = img.data, dark = new Uint8Array(W * H), lit = new Uint8Array(W * H);
+  for (let i = 0, j = 0; i < W * H; i++, j += 4) {
+    const [, s, v] = rgb2hsv(D[j], D[j + 1], D[j + 2]);
+    if (v < 50) dark[i] = 1; else if (v > 170 || (s > 120 && v > 140)) lit[i] = 1;
+  }
+  const near = dilate(dark, W, H, 5);
+  const c = frameCanvas(W, H), ctx = c.getContext("2d"), out = ctx.createImageData(W, H);
+  for (let i = 0, j = 0; i < W * H; i++, j += 4) { const t = lit[i] && near[i] ? 0 : 255; out.data[j] = out.data[j + 1] = out.data[j + 2] = t; out.data[j + 3] = 255; }
+  ctx.putImageData(out, 0, 0);
+  return c;
+}
+
+async function ocrFrame(worker, canvas, img) {
+  const words = [];
+  for (const src of [captionMask(img), canvas]) {
+    const { data } = await worker.recognize(src);
+    for (const w of data.words || []) {
+      const t = w.text.trim();
+      if (w.confidence < 60 || !/[\p{L}\p{N}]/u.test(t)) continue;
+      const b = w.bbox;
+      // as duas leituras se sobrepõem: com ambas confiáveis, fica a caixa mais justa (a imagem
+      // tratada pode "vazar" uma caixa de fundo clara para dentro do texto); senão, a mais confiável
+      const k = words.findIndex((o) => Math.min(o.x1, b.x1) - Math.max(o.x0, b.x0) > 0.4 * Math.min(b.x1 - b.x0, o.x1 - o.x0) && Math.min(o.y1, b.y1) - Math.max(o.y0, b.y0) > 0.4 * Math.min(b.y1 - b.y0, o.y1 - o.y0));
+      const item = { text: t, x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, conf: w.confidence };
+      if (k < 0) words.push(item);
+      else {
+        const o = words[k], bothOk = o.conf >= 70 && item.conf >= 70;
+        const tighter = (item.y1 - item.y0) < 0.8 * (o.y1 - o.y0);
+        if (bothOk ? tighter : item.conf > o.conf) words[k] = item;
+      }
+    }
+  }
+  // agrupa palavras em linhas
+  words.sort((a, b) => (a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2);
+  const lines = [];
+  for (const w of words) {
+    const cy = (w.y0 + w.y1) / 2, l = lines.find((L) => Math.abs(L.cy - cy) < 0.5 * (w.y1 - w.y0));
+    if (l) { l.words.push(w); l.cy = (l.cy * (l.words.length - 1) + cy) / l.words.length; } else lines.push({ cy, words: [w] });
+  }
+  for (const l of lines) {
+    l.words.sort((a, b) => a.x0 - b.x0);
+    l.text = l.words.map((w) => w.text).join(" ");
+    l.x0 = Math.min(...l.words.map((w) => w.x0)); l.x1 = Math.max(...l.words.map((w) => w.x1));
+    l.y0 = Math.min(...l.words.map((w) => w.y0)); l.y1 = Math.max(...l.words.map((w) => w.y1));
+  }
+  return lines;
+}
+
+async function analyzeReference(file, onProg) {
+  const ev = {};
+  const v = await makeVideo(file);
+  const dur = Math.min(v.duration, 90);
+  ev.duracao_s = +dur.toFixed(1);
+  ev.resolucao = `${v.videoWidth}x${v.videoHeight}`;
+  const prof = baseProfile();
+  prof.name = file.name.replace(/\.[^.]+$/, "");
+  const aspect = v.videoWidth / v.videoHeight;
+  prof.format = { width: 1080, height: aspect < 0.7 || aspect >= 1.2 ? 1920 : aspect < 0.9 ? 1350 : 1080, fps: 30, layout: "crop" };
+  prof.duration = { target_s: +dur.toFixed(1), min_s: +Math.max(10, dur * 0.6).toFixed(1), max_s: +Math.min(180, dur * 1.4).toFixed(1) };
+
+  // fala
+  onProg(0.03, "transcrevendo a referência");
+  let tr = null;
+  try { tr = await transcribe(file, { size: "base", language: $("#lang").value }, (f, m) => onProg(0.03 + 0.25 * f, m)); }
+  catch (e) { console.warn(e); ev.aviso = "sem transcrição da referência"; }
+  const words = tr ? tr.words.filter((w) => w.start < dur) : [];
+  const sents = sentences(words);
+  if (words.length > 5) {
+    const gaps = words.slice(1).map((w, i) => w.start - words[i].end).filter((g) => g >= 0);
+    const span = words[words.length - 1].end - words[0].start;
+    prof.pacing.words_per_sec = +(words.length / Math.max(1, span)).toFixed(2);
+    const p90 = percentile(gaps, 90);
+    prof.pacing.jump_cuts = p90 < 0.45;
+    prof.pacing.max_pause_s = +clamp(percentile(gaps, 95), 0.12, 0.8).toFixed(2);
+    ev.fala = { palavras_por_s: prof.pacing.words_per_sec, pausa_p90_s: +p90.toFixed(2) };
+  }
+  const hook = hookType(sents);
+  prof.content = { hook_type: hook, guidance: HOOK_GUIDANCE[hook] + " " + baseProfile().content.guidance };
+  if (sents.length) ev.gancho = { tipo: hook, primeira_frase: sents[0].text.slice(0, 140) };
+
+  // edição: cortes, punch-ins, rostos
+  onProg(0.3, "analisando cortes, zoom e rostos");
+  const det = await getFaceDetector();
+  const fps = 6, samples = [];
+  let prevSmall = null, prevGray = null;
+  for (let t = 0; t < dur; t += 1 / fps) {
+    await seek(v, t);
+    const fr = grab(v, 240);
+    const g = toGray(fr.img);
+    const small = fr.img.data;
+    let diff = 0;
+    if (prevSmall) { let s = 0; for (let i = 0; i < small.length; i += 16) s += Math.abs(small[i] - prevSmall[i]) + Math.abs(small[i + 1] - prevSmall[i + 1]) + Math.abs(small[i + 2] - prevSmall[i + 2]); diff = s / (small.length / 16) / 3; }
+    const faces = detectFaces(det, fr.canvas);
+    samples.push({ t, diff, faces, gray: g, W: fr.w, H: fr.h, prevGray });
+    prevSmall = new Uint8ClampedArray(small); prevGray = g;
+    if (samples.length % 10 === 0) { onProg(0.3 + 0.25 * (t / dur), "analisando cortes, zoom e rostos"); await yieldUI(); }
+  }
+  const diffs = samples.slice(1).map((s) => s.diff);
+  const thr = Math.max(18, median(diffs) * 3.5);
+  const events = [];
+  let last = -99;
+  for (let i = 1; i < samples.length; i++) {
+    const loc = samples.slice(Math.max(1, i - 2), i + 3).map((s) => s.diff);
+    if (samples[i].diff >= thr && samples[i].diff === Math.max(...loc) && i - last >= Math.round(fps * 0.4)) {
+      const a = samples[i - 1], b = samples[i];
+      let z = null;
+      if (a.faces.length === 1 && b.faces.length === 1) z = faceZoom(a.gray, b.gray, b.W, b.H, a.faces[0], b.faces[0]);
+      events.push(z ? { t: b.t, kind: "zoom", scale: z.scale } : { t: b.t, kind: "cut" });
+      last = i;
+    }
+  }
+  const zooms = events.filter((e) => e.kind === "zoom"), cuts = events.length - zooms.length;
+  prof.pacing.cuts_per_min = +((events.length / dur) * 60).toFixed(1);
+  if (zooms.length) prof.pacing.punch_in_scale = +clamp(median(zooms.map((z) => Math.max(z.scale, 1 / z.scale))), 1.05, 1.5).toFixed(2);
+  ev.edicao = { trocas_de_plano: cuts, punch_ins: zooms.length, trocas_por_min: prof.pacing.cuts_per_min, plano_medio_s: +(dur / (events.length + 1)).toFixed(2) };
+
+  // layout
+  if (aspect < 0.9) {
+    const rows = samples.filter((_, i) => i % Math.max(1, Math.floor(samples.length / 12)) === 0);
+    const H = rows[0].H, W = rows[0].W, band = Math.round(H * 0.12);
+    const rowStat = (s, y0, y1) => { let m = 0, sh = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; m += s.gray[i]; sh += Math.abs(s.gray[i - 1] - 2 * s.gray[i] + s.gray[i + 1]); n++; } return [m / n, sh / n]; };
+    const top = rows.map((s) => rowStat(s, 0, band)), bot = rows.map((s) => rowStat(s, H - band, H)), mid = rows.map((s) => rowStat(s, Math.round(H * 0.4), Math.round(H * 0.6)));
+    const mt = median(top.map((x) => x[0])), mb = median(bot.map((x) => x[0]));
+    const st = median(top.map((x) => x[1])) / (median(mid.map((x) => x[1])) + 1e-6), sb = median(bot.map((x) => x[1])) / (median(mid.map((x) => x[1])) + 1e-6);
+    const two = samples.filter((s) => s.faces.length >= 2 && Math.min(...s.faces.map((f) => f.cy)) < 0.5 && Math.max(...s.faces.map((f) => f.cy)) > 0.5).length;
+    prof.format.layout = mt < 18 && mb < 18 ? "fit_black" : st < 0.35 && sb < 0.35 ? "fit_blur" : two / samples.length > 0.3 ? "split" : "crop";
+  }
+  ev.layout = prof.format.layout;
+
+  // legendas e título via OCR
+  onProg(0.56, "lendo as legendas (OCR)");
+  const worker = await getOCR((m) => onProg(0.56, m));
+  const nOcr = Math.min(50, Math.max(8, Math.round(dur * 1.5)));
+  const frames = [];
+  for (let k = 0; k < nOcr; k++) {
+    const t = (k + 0.5) * (dur / nOcr);
+    await seek(v, t);
+    const fr = grab(v, 720);
+    fr.t = t;
+    fr.lines = await ocrFrame(worker, fr.canvas, fr.img);
+    frames.push(fr);
+    onProg(0.56 + 0.4 * (k / nOcr), `lendo as legendas (OCR) ${k + 1}/${nOcr}`);
+  }
+  inferText(prof, ev, frames, words, v);
+  URL.revokeObjectURL(v.src);
+  prof.evidence = ev;
+  const poster = frames[Math.min(frames.length - 1, 1)]?.canvas;
+  onProg(1, "estilo aprendido");
+  return { profile: prof, poster };
+}
+
+function inferText(prof, ev, frames, words, v) {
+  const H = frames[0]?.h || 1280, W = frames[0]?.w || 720, nF = frames.length || 1;
+  const spoken = (t) => new Set(words.filter((w) => w.end > t - 2.5 && w.start < t + 2.5).map((w) => norm(w.text)));
+  // título: na mesma altura, as mesmas palavras se repetem na maior parte dos frames
+  // (o OCR pode perder uma palavra aqui e ali, então compara por palavras estáveis)
+  const bucket = (l) => Math.round((l.cy / H) * 25);
+  const tokFreq = {}, bucketFrames = {};
+  frames.forEach((f) => {
+    const seen = new Set(), seenB = new Set();
+    for (const l of f.lines) { const b = bucket(l); seenB.add(b); for (const t of norm(l.text).split(" ")) if (t.length >= 2) seen.add(`${b}|${t}`); }
+    seen.forEach((k) => (tokFreq[k] = (tokFreq[k] || 0) + 1));
+    seenB.forEach((b) => (bucketFrames[b] = (bucketFrames[b] || 0) + 1));
+  });
+  const stable = (b, t) => (tokFreq[`${b}|${t}`] || 0) >= Math.max(3, 0.35 * nF);
+  const isStatic = (l) => {
+    const toks = norm(l.text).split(" ").filter((t) => t.length >= 2);
+    return toks.length > 0 && toks.filter((t) => stable(bucket(l), t)).length / toks.length >= 0.5;
+  };
+  const key = (l) => `${bucket(l)}`;
+  const staticKeys = new Set(frames.flatMap((f) => f.lines.filter(isStatic).map(key)));
+  // palavras com caixa bem mais alta que as vizinhas vêm de leitura "vazada" (caixa de fundo): descarta
+  const tidy = (l) => {
+    const hs = l.words.filter((w) => w.text.length >= 2).map((w) => w.y1 - w.y0);
+    const ref = hs.length ? Math.min(...hs) : 0;
+    const ws = ref ? l.words.filter((w) => w.y1 - w.y0 <= 1.35 * ref) : l.words;
+    if (!ws.length) return null;
+    return { ...l, words: ws, text: ws.map((w) => w.text).join(" "), x0: Math.min(...ws.map((w) => w.x0)), x1: Math.max(...ws.map((w) => w.x1)),
+      y0: Math.min(...ws.map((w) => w.y0)), y1: Math.max(...ws.map((w) => w.y1)) };
+  };
+  const titleLines = frames.flatMap((f) => f.lines.filter(isStatic).map((l) => ({ f, l: tidy(l) })).filter((x) => x.l));
+  if (titleLines.length) {
+    const hs = titleLines.map(({ l }) => median(l.words.map((w) => w.y1 - w.y0)) / H);
+    const aspectC = median(titleLines.flatMap(({ l }) => l.words.filter((w) => w.text.length >= 3).map((w) => (w.x1 - w.x0) / w.text.length / (w.y1 - w.y0))));
+    const font = aspectC < 0.62 ? "Anton" : "Montserrat Black";
+    // une as partes do título lidas no mesmo frame (o OCR às vezes quebra a linha)
+    const byFrame = new Map();
+    for (const { f, l } of titleLines) { const u = byFrame.get(f); if (u) { u.l = { ...u.l, x0: Math.min(u.l.x0, l.x0), x1: Math.max(u.l.x1, l.x1), y0: Math.min(u.l.y0, l.y0), y1: Math.max(u.l.y1, l.y1) }; } else byFrame.set(f, { f, l: { ...l } }); }
+    const sample = [...byFrame.values()].slice(0, 12);
+    const boxes = sample.map(({ f, l }) => boxBehind(f.img, l)).filter(Boolean);
+    const hasBox = boxes.length > sample.length / 2;
+    let textCol;
+    if (hasBox) {
+      // texto = pixels longe da cor da caixa
+      const bc = [0, 1, 2].map((c) => median(boxes.map((b) => b[c])));
+      const far = [];
+      for (const { f, l } of sample) { const D = f.img.data; for (let y = Math.round(l.y0); y < l.y1; y += 2) for (let x = Math.round(l.x0); x < l.x1; x += 2) { const j = (y * W + x) * 4; if (Math.abs(D[j] - bc[0]) + Math.abs(D[j + 1] - bc[1]) + Math.abs(D[j + 2] - bc[2]) > 240) far.push([D[j], D[j + 1], D[j + 2]]); } }
+      textCol = far.length ? hex([0, 1, 2].map((c) => median(far.map((p) => p[c])))) : "#000000";
+      prof.title.box_color = hex(bc);
+    } else {
+      const tc = sample.map(({ f, l }) => textColors(f.img, l)).filter((c) => c.white || c.accent);
+      textCol = tc.length ? hex(tc[0].white || tc[0].accent) : "#FFFFFF";
+      prof.title.box_color = "#00000000";
+    }
+    Object.assign(prof.title, { enabled: true, font, size: +(median(hs) / CAP_RATIO[font]).toFixed(4), position_y: +(median(titleLines.map(({ l }) => l.cy / H))).toFixed(3),
+      uppercase: upperRatio(titleLines.map(({ l }) => l.text)) > 0.7, text_color: textCol });
+    ev.titulo = { texto: titleLines[0].l.text, posicao: prof.title.position_y, caixa: hasBox };
+  }
+
+  // legendas: palavras que mudam e batem com a fala (lixo de 1 letra lido na imagem não conta)
+  const caps = [];
+  const matches = (sp, text) => {
+    const t = norm(text).replace(/ /g, "");
+    if (t.length < 2) return false;
+    return sp.has(t) || [...sp].some((s) => s.length >= 3 && t.length >= 3 && (s.includes(t) || t.includes(s)));
+  };
+  for (const f of frames) {
+    const sp = spoken(f.t);
+    const ls = [];
+    for (const l of f.lines.filter((l) => !isStatic(l))) {
+      const good = words.length ? l.words.filter((w) => matches(sp, w.text)) : l.words.filter((w) => norm(w.text).length >= 2 && l.cy / H > 0.35);
+      if (!good.length || good.length / l.words.length < 0.5) continue;
+      const L = { ...l, words: good, text: good.map((w) => w.text).join(" "), cy: median(good.map((w) => (w.y0 + w.y1) / 2)) };
+      L.x0 = Math.min(...good.map((w) => w.x0)); L.x1 = Math.max(...good.map((w) => w.x1)); L.y0 = Math.min(...good.map((w) => w.y0)); L.y1 = Math.max(...good.map((w) => w.y1));
+      ls.push(L);
+    }
+    if (ls.length) caps.push({ f, lines: ls });
+  }
+  ev.legendas = { frames_com_legenda: caps.length, frames_lidos: nF };
+  if (caps.length < Math.max(3, 0.15 * nF)) { prof.captions.enabled = false; ev.legendas.conclusao = "sem legendas"; return; }
+
+  const allWords = caps.flatMap((c) => c.lines.flatMap((l) => l.words));
+  const heights = allWords.filter((w) => w.text.length >= 2).map((w) => (w.y1 - w.y0) / H);
+  const charAsp = median(allWords.filter((w) => w.text.length >= 3).map((w) => (w.x1 - w.x0) / w.text.length / (w.y1 - w.y0)));
+  const font = charAsp < 0.62 ? "Anton" : "Montserrat Black";
+  // o OCR às vezes perde uma palavra (nunca inventa: já filtramos pela fala). Como a legenda é
+  // centralizada, a largura ocupada dos dois lados do centro revela palavras que não foram lidas.
+  const wpc = clamp(Math.round(median(caps.map(({ lines }) => {
+    let n = 0;
+    for (const l of lines) {
+      const read = l.words.length, avgW = l.words.reduce((a, w) => a + (w.x1 - w.x0), 0) / read, gap = 0.25 * (l.y1 - l.y0);
+      const span = 2 * Math.max(W / 2 - l.x0, l.x1 - W / 2);
+      n += Math.max(read, Math.round((span + gap) / (avgW + gap)));
+    }
+    return n;
+  }))), 1, 8);
+  const ys = caps.map((c) => median(c.lines.map((l) => l.cy / H)));
+  // cores por palavra: legenda com palavras brancas e coloridas ao mesmo tempo = destaque
+  let hlFrames = 0, colFrames = 0, whiteFrames = 0; const whites = [], accents = [], strokes = [], outl = [], boxes = [];
+  const sameTextH = {};
+  for (const { f, lines } of caps.slice(0, 40)) {
+    let w = 0, c = 0;
+    for (const l of lines) {
+      const bb = boxBehind(f.img, l); boxes.push(!!bb);
+      for (const wd of l.words) {
+        const tc = textColors(f.img, wd);
+        outl.push(tc.outline); if (tc.stroke) strokes.push(tc.stroke / H);
+        const isColored = tc.accent && (!tc.white || wd.text.length > 0) && (tc.accent && rgb2hsv(...tc.accent)[1] > 120);
+        if (tc.white && !isColored) { w++; whites.push(tc.white); }
+        else if (tc.accent) { c++; accents.push(tc.accent); }
+        // acentos e letras com perna mudam a altura da caixa; compara só palavras "retas"
+        if (/^[A-Z0-9]{3,}$/.test(wd.text) && !/[QJ]/.test(wd.text)) (sameTextH[wd.text] ||= []).push(wd.y1 - wd.y0);
+      }
+    }
+    if (w && c) hlFrames++;
+    if (c) colFrames++;
+    if (w) whiteFrames++;
+  }
+  const nc = Math.min(40, caps.length);
+  // destaque = brancas e coloridas convivem (na mesma legenda ou ao longo do vídeo, já que o OCR perde palavras)
+  const hlRatio = Math.max(hlFrames / nc, colFrames / nc > 0.2 && whiteFrames / nc > 0.2 ? Math.min(colFrames, whiteFrames) / nc : 0);
+  const popVotes = Object.values(sameTextH).filter((a) => a.length >= 2).map((a) => Math.max(...a) / Math.min(...a) > 1.15);
+  const pop = popVotes.length >= 2 && popVotes.filter(Boolean).length / popVotes.length > 0.4;
+  const animation = hlRatio > 0.25 ? (pop ? "pop" : "karaoke") : wpc === 1 ? "word" : pop ? "pop" : "static";
+  const med3 = (arr) => [0, 1, 2].map((c) => median(arr.map((p) => p[c])));
+  let accent = null;
+  if (accents.length) { const bins = new Array(18).fill(0); const hs = accents.map((a) => Math.min(17, Math.floor(rgb2hsv(...a)[0] / 10))); hs.forEach((b) => bins[b]++); const top = bins.indexOf(Math.max(...bins)); accent = med3(accents.filter((_, i) => hs[i] === top)); }
+  const size = median(heights) / CAP_RATIO[font];
+  const hasOutline = outl.filter(Boolean).length > outl.length / 2;
+  Object.assign(prof.captions, {
+    enabled: true, font, size: +size.toFixed(4), position_y: +median(ys).toFixed(3), words_per_caption: wpc,
+    uppercase: upperRatio(allWords.map((w) => w.text)) > 0.7,
+    primary_color: whites.length ? hex(med3(whites)) : accent && hlRatio <= 0.25 ? hex(accent) : "#FFFFFF",
+    highlight_color: accent ? hex(accent) : "#FFE600",
+    outline_width: hasOutline ? +clamp(median(strokes) / size, 0.03, 0.2).toFixed(3) : 0,
+    animation, background_box: boxes.filter(Boolean).length > boxes.length / 2,
+  });
+  Object.assign(ev.legendas, { palavras_por_legenda: wpc, posicao: prof.captions.position_y, fonte: font, proporcao_caractere: +charAsp.toFixed(2),
+    destaque: prof.captions.highlight_color, frames_com_destaque: +hlRatio.toFixed(2), animacao: animation, contorno: hasOutline });
+}
+
+const upperRatio = (texts) => { const L = texts.join("").split("").filter((c) => /\p{L}/u.test(c)); return L.filter((c) => c === c.toUpperCase()).length / Math.max(1, L.length); };
+
+// ============================================================================ seleção dos momentos
+const STRONG = new Set("nunca ninguem segredo verdade mentira absurdo erro erros dinheiro milhao milhoes rico pobre morte morri medo louco insano incrivel chocante polemica proibido pior melhor maior jamais sempre todo mundo cuidado atencao problema resultado simples facil dificil odeio amo chorei briga demitido falencia sucesso fracasso deus mano cara never secret truth lie money million worst best mistake crazy insane".split(" "));
+const CONNECTIVES = new Set("e mas entao ai ne tipo porque pois que and but so because or ou".split(" "));
+const ANAPHORA = new Set("isso isto esse essa esses essas aquilo ele ela eles elas la this that it they he she".split(" "));
+const nw = (w) => norm(w).replace(/ /g, "");
+
+function energyCurve(audio) {
+  if (!audio) return null;
+  const hop = 1600, n = Math.floor(audio.length / hop), db = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let j = i * hop; j < (i + 1) * hop; j++) s += audio[j] * audio[j]; db[i] = 10 * Math.log10(s / hop + 1e-12); }
+  const m = median(Array.from(db)), sd = Math.sqrt(db.reduce((a, v) => a + (v - m) ** 2, 0) / n) + 1e-6;
+  return db.map((v) => (v - m) / sd);
+}
+
+function hookScore(s, prof) {
+  const ws = s.words.map((w) => nw(w.text));
+  const f = {
+    pergunta: s.text.includes("?") || QUESTION_START.test(s.text.toLowerCase()), numero: /\d/.test(s.text),
+    fortes: ws.filter((w) => STRONG.has(w)).length, curta: ws.length <= 14,
+    conectivo: CONNECTIVES.has(ws[0]), sem_contexto: ANAPHORA.has(ws[0]), exclamacao: s.text.includes("!"),
+  };
+  let sc = (f.pergunta ? 1.2 : 0) + (f.numero ? 0.8 : 0) + Math.min(1.5, 0.5 * f.fortes) + (f.curta ? 0.4 : -0.3) + (f.exclamacao ? 0.5 : 0) - (f.conectivo ? 1.5 : 0) - (f.sem_contexto ? 1.2 : 0);
+  const want = prof.content.hook_type;
+  if (want === "question" && f.pergunta) sc += 1; else if (want === "number" && f.numero) sc += 1; else if (want === "statement" && !f.pergunta && f.fortes) sc += 0.6;
+  return [sc, f];
+}
+
+function heuristicSelect(tr, prof, n) {
+  const ss = sentences(tr.words), { min_s: lo, max_s: hi, target_s: target } = prof.duration;
+  const energy = energyCurve(tr.audio), cands = [];
+  for (let i = 0; i < ss.length; i++) for (let j = i; j < ss.length; j++) {
+    const d = ss[j].end - ss[i].start; if (d > hi) break; if (d < lo) continue;
+    const [hk, f] = hookScore(ss[i], prof);
+    const ws = ss.slice(i, j + 1).flatMap((s) => s.words.map((w) => nw(w.text)));
+    const strong = ws.filter((w) => STRONG.has(w)).length / Math.max(1, ws.length);
+    const lastW = ss[j].words[ss[j].words.length - 1].text;
+    let ending = SENT_END.test(lastW) ? 0.6 : -0.6; if (/[?!]$/.test(lastW)) ending += 0.3;
+    const wps = ws.length / Math.max(1, d);
+    let en = 0;
+    if (energy) { const a = Math.floor(ss[i].start * 10), b = Math.max(a + 1, Math.floor(ss[j].end * 10)); const seg = Array.from(energy.slice(a, b)); if (seg.length) en = 0.5 * (seg.reduce((x, y) => x + y, 0) / seg.length) + 0.15 * percentile(seg, 90) + 0.3 * (seg.slice(0, 30).reduce((x, y) => x + y, 0) / Math.min(30, seg.length)); }
+    const parts = { gancho: hk * 1.6, fortes: strong * 25, final: ending, duracao: (-Math.abs(d - target) / Math.max(5, target)) * 1.5, ritmo: -Math.abs(wps - prof.pacing.words_per_sec) / 2, energia: en };
+    cands.push({ score: Object.values(parts).reduce((a, b) => a + b, 0), i, j, parts, f });
+  }
+  if (!cands.length) { const d = Math.min(target, tr.duration); return [{ start: 0, end: d, score: 50, title: "Corte", hook: "", reason: "pouca fala" }]; }
+  cands.sort((a, b) => b.score - a.score);
+  const chosen = [];
+  for (const c of cands) { if (chosen.every((o) => c.j < o.i || c.i > o.j)) chosen.push(c); if (chosen.length >= n) break; }
+  const lo5 = percentile(cands.map((c) => c.score), 5), top = cands[0].score;
+  return chosen.map((c) => {
+    const why = [c.f.pergunta && "abre com pergunta", c.f.numero && "abre com número", c.f.fortes && "gancho com palavras fortes", c.parts.energia > 0.3 && "voz com energia acima da média", c.parts.final > 0 && "termina com frase completa"].filter(Boolean);
+    return { start: ss[c.i].start, end: ss[c.j].end, score: Math.round(clamp(40 + ((c.score - lo5) / Math.max(1e-6, top - lo5)) * 58, 0, 99)),
+      title: shortTitle(ss[c.i].text), hook: ss[c.i].text, reason: why.join(", ") || "melhor equilíbrio de gancho, ritmo e duração" };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function shortTitle(t, lim = 34) { t = t.replace(/\s+/g, " ").trim(); return t.length <= lim ? t : t.slice(0, lim).replace(/\s+\S*$/, "") + "…"; }
+
+async function claudeSelect(tr, prof, n, key) {
+  const ss = sentences(tr.words);
+  const fmt = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
+  const prompt = `Transcrição numerada por frase:\n\n${ss.map((s) => `[${s.index}] (${fmt(s.start)}–${fmt(s.end)}) ${s.text}`).join("\n")}\n\nEscolha os ${n} melhores cortes, sem sobreposição.\nRegras:\n- Cada corte deve durar entre ${prof.duration.min_s}s e ${prof.duration.max_s}s (ideal ~${prof.duration.target_s}s).\n- Comece numa frase que funcione sozinha como gancho, sem depender de contexto anterior.\n- Termine com conclusão, punchline ou virada.\n- Estilo a imitar: ${prof.content.guidance}\nOrdene do maior para o menor potencial viral.`;
+  const schema = { type: "object", additionalProperties: false, required: ["clips"], properties: { clips: { type: "array", items: { type: "object", additionalProperties: false,
+    required: ["first_sentence", "last_sentence", "title", "score", "reason"],
+    properties: { first_sentence: { type: "integer" }, last_sentence: { type: "integer" }, title: { type: "string" }, score: { type: "integer" }, reason: { type: "string" } } } } } };
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model: "claude-opus-5-5", max_tokens: 16000, output_config: { effort: "medium", format: { type: "json_schema", schema } },
+      system: "Você é um editor de cortes virais para TikTok, Reels e Shorts.", messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!r.ok) throw new Error(`Claude respondeu ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const data = await r.json();
+  if (data.stop_reason === "refusal") throw new Error("o Claude recusou o pedido");
+  const text = data.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  const out = [], used = [];
+  for (const c of JSON.parse(text).clips) {
+    const i = c.first_sentence, j = c.last_sentence;
+    if (!(i >= 0 && i <= j && j < ss.length)) continue;
+    const d = ss[j].end - ss[i].start;
+    if (d < prof.duration.min_s * 0.8 || d > prof.duration.max_s * 1.2 || used.some(([a, b]) => !(j < a || i > b))) continue;
+    used.push([i, j]);
+    out.push({ start: ss[i].start, end: ss[j].end, score: clamp(c.score, 0, 100), title: shortTitle(c.title), hook: ss[i].text, reason: c.reason });
+  }
+  return out;
+}
+
+// ============================================================================ edição (jump cuts, planos, zoom)
+function buildEdit(words, start, end, prof) {
+  const ws = words.filter((w) => w.start >= start - 0.05 && w.end <= end + 0.05);
+  let spans = [[start, end]];
+  if (prof.pacing.jump_cuts && ws.length) {
+    spans = [];
+    for (const w of ws) {
+      const a = Math.max(start, w.start - 0.06), b = Math.min(end, w.end + 0.12);
+      if (spans.length && a - spans[spans.length - 1][1] <= prof.pacing.max_pause_s) spans[spans.length - 1][1] = Math.max(spans[spans.length - 1][1], b);
+      else spans.push([a, b]);
+    }
+    const merged = [];
+    for (const sp of spans) { const L = merged[merged.length - 1]; if (L && (sp[1] - sp[0] < 0.25 || L[1] - L[0] < 0.25)) L[1] = sp[1]; else merged.push(sp); }
+    spans = merged.filter(([a, b]) => b - a > 0.05);
+  }
+  let t = 0;
+  const segs = spans.map(([a, b]) => { const s = { src_start: a, src_end: b, out_start: t }; t += b - a; return s; });
+  const outWords = [];
+  for (const w of words) for (const s of segs) if (w.start >= s.src_start - 0.01 && w.start < s.src_end) { const a = s.out_start + w.start - s.src_start; outWords.push({ text: w.text, start: a, end: Math.max(a + 0.05, s.out_start + Math.min(w.end, s.src_end) - s.src_start) }); break; }
+  return { segments: segs, duration: t, words: outWords, shots: planShots(segs, t, prof) };
+}
+
+function planShots(segs, total, prof) {
+  const scale = prof.pacing.punch_in_scale, cpm = prof.pacing.cuts_per_min;
+  if (scale <= 1.01 || cpm <= 0) return [{ a: 0, b: total, z: 1, z2: prof.pacing.slow_zoom ? 1.04 : 1 }];
+  const interval = 60 / cpm, minLen = Math.max(0.7, interval * 0.6);
+  const bounds = [0];
+  for (const s of segs.slice(1)) if (s.out_start - bounds[bounds.length - 1] >= minLen) bounds.push(s.out_start);
+  const filled = [0];
+  bounds.forEach((a, k) => { const b = k + 1 < bounds.length ? bounds[k + 1] : total; const extra = Math.floor((b - a) / interval) - 1; for (let q = 1; q <= extra; q++) filled.push(a + ((b - a) / (extra + 1)) * q); if (b < total) filled.push(b); });
+  const pts = [...new Set(filled.map((x) => +x.toFixed(3)))].sort((x, y) => x - y);
+  return pts.map((a, k) => { const b = k + 1 < pts.length ? pts[k + 1] : total; const z = k % 2 ? scale : 1; return { a, b, z, z2: prof.pacing.slow_zoom ? z * 1.04 : z }; }).filter((s) => s.b - s.a > 0.01);
+}
+
+function zoomAt(shots, t) {
+  const s = shots.find((x) => t >= x.a && t < x.b) || shots[shots.length - 1];
+  return s.z + (s.z2 - s.z) * clamp((t - s.a) / Math.max(1e-6, s.b - s.a), 0, 1);
+}
+
+// ============================================================================ trilha de rostos e enquadramento
+async function faceTrack(v, start, end, onProg) {
+  const det = await getFaceDetector();
+  const fps = 3, T = [];
+  let prev = null;
+  for (let t = start; t <= end; t += 1 / fps) {
+    await seek(v, t);
+    const fr = grab(v, 480);
+    const faces = detectFaces(det, fr.canvas).sort((a, b) => b.w * b.h - a.w * a.h);
+    let main = faces[0] || null, other = null;
+    if (main && prev != null) { const near = faces.reduce((a, f) => (Math.abs(f.cx - prev) < Math.abs(a.cx - prev) ? f : a), main); if (Math.abs(near.cx - prev) < 0.12 && near.w * near.h > 0.5 * main.w * main.h) main = near; }
+    if (main) other = faces.find((f) => f !== main && f.w * f.h > 0.2 * main.w * main.h && Math.abs(f.cx - main.cx) > 0.2) || null;
+    let left = main, right = other;
+    if (other && other.cx < main.cx) { left = other; right = main; }
+    T.push({ t, cx: left?.cx, cy: left?.cy, h: left?.h, two: !!other, cx2: right?.cx, cy2: right?.cy, h2: right?.h });
+    if (main) prev = main.cx;
+    if (T.length % 6 === 0) { onProg?.((t - start) / (end - start)); await yieldUI(); }
+  }
+  const smooth = (key, def, dz) => {
+    const raw = T.map((p) => (p.two || key === "cx" || key === "cy" || key === "h" ? p[key] : undefined));
+    const idx = raw.map((v, i) => (v == null ? -1 : i)).filter((i) => i >= 0);
+    if (!idx.length) return T.map(() => def);
+    const filled = raw.map((v, i) => { if (v != null) return v; const a = [...idx].reverse().find((k) => k < i), b = idx.find((k) => k > i); if (a == null) return raw[b]; if (b == null) return raw[a]; return raw[a] + ((raw[b] - raw[a]) * (i - a)) / (b - a); });
+    const med = filled.map((_, i) => median(filled.slice(Math.max(0, i - 2), i + 3)));
+    let cur = med[0];
+    return med.map((v) => { if (Math.abs(v - cur) > dz) cur += (v - cur) * 0.35; return cur; });
+  };
+  const two = T.map((p) => p.two);
+  return { times: T.map((p) => p.t), cx: smooth("cx", 0.5, 0.04), cy: smooth("cy", 0.4, 0.05), h: smooth("h", 0.3, 0.03),
+    cx2: smooth("cx2", 0.75, 0.04), cy2: smooth("cy2", 0.4, 0.05), h2: smooth("h2", 0.3, 0.03),
+    two: two.map((_, i) => { const win = two.slice(Math.max(0, i - 3), i + 4); return win.filter(Boolean).length / win.length > 0.6; }) };
+}
+
+function interp(track, key, t) {
+  const ts = track.times, a = track[key];
+  if (!ts.length) return 0.5;
+  if (t <= ts[0]) return a[0];
+  for (let i = 1; i < ts.length; i++) if (t < ts[i]) return a[i - 1] + ((a[i] - a[i - 1]) * (t - ts[i - 1])) / (ts[i] - ts[i - 1]);
+  return a[a.length - 1];
+}
+
+function drawCrop(ctx, v, cx, cy, dx, dy, dw, dh, zoom) {
+  const fw = v.videoWidth, fh = v.videoHeight, aspect = dw / dh;
+  let ch = fh / zoom, cw = ch * aspect;
+  if (cw > fw) { cw = fw / zoom; ch = cw / aspect; }
+  const x0 = clamp(cx * fw - cw / 2, 0, fw - cw), y0 = clamp(cy * fh - ch * 0.38, 0, fh - ch);
+  ctx.drawImage(v, x0, y0, cw, ch, dx, dy, dw, dh);
+}
+
+function drawVideo(ctx, v, prof, track, srcT, zoom) {
+  const W = ctx.canvas.width, H = ctx.canvas.height, L = prof.format.layout;
+  if (L === "fit_blur" || L === "fit_black") {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    const fw = v.videoWidth, fh = v.videoHeight;
+    if (L === "fit_blur") { const s = Math.max(W / fw, H / fh); ctx.filter = "blur(28px) brightness(0.6)"; ctx.drawImage(v, (W - fw * s) / 2, (H - fh * s) / 2, fw * s, fh * s); ctx.filter = "none"; }
+    const gw = W * zoom, gh = (fh * gw) / fw;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip(); ctx.drawImage(v, (W - gw) / 2, (H - gh) / 2, gw, gh); ctx.restore();
+    return;
+  }
+  const cx = track ? interp(track, "cx", srcT) : 0.5, cy = track ? interp(track, "cy", srcT) : 0.4;
+  if (L === "split" && track) {
+    const i = Math.min(track.two.length - 1, Math.max(0, track.times.findIndex((t) => t > srcT) - 1));
+    if (track.two[i]) {
+      const half = H / 2;
+      const z1 = clamp(0.4 / Math.max(0.05, interp(track, "h", srcT)), 1, 3) * zoom, z2 = clamp(0.4 / Math.max(0.05, interp(track, "h2", srcT)), 1, 3) * zoom;
+      drawCrop(ctx, v, cx, cy, 0, 0, W, half, z1);
+      drawCrop(ctx, v, interp(track, "cx2", srcT), interp(track, "cy2", srcT), 0, half, W, H - half, z2);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, half - 3, W, 6);
+      return;
+    }
+  }
+  drawCrop(ctx, v, cx, cy, 0, 0, W, H, zoom);
+}
+
+// ============================================================================ legendas no canvas
+function groupWords(words, n, maxGap = 0.6) {
+  const gs = []; let cur = [];
+  for (const w of words) {
+    if (cur.length && (cur.length >= n || w.start - cur[cur.length - 1].end > maxGap)) { gs.push(cur); cur = []; }
+    cur.push(w);
+    if (SENT_END.test(w.text) && cur.length >= Math.max(1, n >> 1)) { gs.push(cur); cur = []; }
+  }
+  if (cur.length) gs.push(cur);
+  return gs.map((g, i) => ({ words: g, a: g[0].start, b: Math.min(g[g.length - 1].end + 0.15, gs[i + 1] ? gs[i + 1][0].start : 1e9) }));
+}
+
+function layoutLines(ctx, tokens, maxW, gap) {
+  const lines = [[]]; let w = 0;
+  for (const t of tokens) { const tw = ctx.measureText(t.text).width; if (lines[lines.length - 1].length && w + gap + tw > maxW) { lines.push([]); w = 0; } const L = lines[lines.length - 1]; t.w = tw; w += (L.length ? gap : 0) + tw; L.push(t); }
+  return lines;
+}
+
+function drawCaption(ctx, groups, t, prof) {
+  const c = prof.captions; if (!c.enabled) return;
+  const g = groups.find((x) => t >= x.a && t < x.b); if (!g) return;
+  const W = ctx.canvas.width, H = ctx.canvas.height, em = c.size * H;
+  const fmt = (s) => (c.uppercase ? s.toUpperCase() : s);
+  let words = g.words, active = -1;
+  for (let k = 0; k < g.words.length; k++) if (g.words[k].start <= t) active = k;
+  if (c.animation === "word") { words = [g.words[Math.max(0, active)]]; active = 0; }
+  ctx.font = fontCss(c.font, em); ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const gap = ctx.measureText(" ").width;
+  const tokens = words.map((w, k) => ({ text: fmt(w.text), k }));
+  const lines = layoutLines(ctx, tokens, W * 0.86, gap);
+  const lh = em * 1.12, y0 = c.position_y * H - ((lines.length - 1) * lh) / 2;
+  const sw = c.outline_width * em;
+  const place = [];
+  lines.forEach((L, li) => { const total = L.reduce((a, t) => a + t.w, 0) + gap * (L.length - 1); let x = (W - total) / 2; for (const tk of L) { place.push({ ...tk, x, y: y0 + li * lh }); x += tk.w + gap; } });
+  if (c.background_box && place.length) {
+    const x0 = Math.min(...place.map((p) => p.x)) - em * 0.3, x1 = Math.max(...place.map((p) => p.x + p.w)) + em * 0.3;
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x0, y0 - lh / 2, x1 - x0, lh * lines.length);
+  }
+  const drawTok = (p, mode) => {
+    const isAct = p.k === active && c.animation !== "static";
+    const scale = isAct && c.animation === "pop" ? 1.18 : c.animation === "word" ? 1 : 1;
+    ctx.save();
+    if (scale !== 1) { ctx.translate(p.x + p.w / 2, p.y); ctx.scale(scale, scale); ctx.translate(-(p.x + p.w / 2), -p.y); }
+    if (mode === "stroke") ctx.strokeText(p.text, p.x, p.y);
+    else { ctx.fillStyle = isAct || c.animation === "word" ? c.highlight_color : c.primary_color; ctx.fillText(p.text, p.x, p.y); }
+    ctx.restore();
+  };
+  if (sw > 0) {
+    ctx.lineJoin = "round"; ctx.miterLimit = 2; ctx.strokeStyle = c.outline_color; ctx.lineWidth = sw * 2;
+    if (c.shadow) { ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = em * 0.12; ctx.shadowOffsetY = em * 0.05; }
+    place.forEach((p) => drawTok(p, "stroke"));
+    ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  } else if (c.shadow) { ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = em * 0.15; }
+  place.forEach((p) => drawTok(p, "fill"));
+  ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
+}
+
+function drawTitle(ctx, title, prof) {
+  const T = prof.title; if (!T.enabled || !title) return;
+  const W = ctx.canvas.width, H = ctx.canvas.height, em = T.size * H;
+  ctx.font = fontCss(T.font, em); ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const tokens = (T.uppercase ? title.toUpperCase() : title).split(/\s+/).map((text) => ({ text }));
+  const gap = ctx.measureText(" ").width, lines = layoutLines(ctx, tokens, W * 0.8, gap).slice(0, 2);
+  const lh = em * 1.18, y0 = T.position_y * H - ((lines.length - 1) * lh) / 2;
+  const widths = lines.map((L) => L.reduce((a, t) => a + t.w, 0) + gap * (L.length - 1));
+  const transparentBox = T.box_color.length > 7 && T.box_color.slice(7).toUpperCase() === "00";
+  if (!transparentBox) {
+    ctx.fillStyle = T.box_color.slice(0, 7); const pad = em * 0.45, mw = Math.max(...widths);
+    ctx.fillRect((W - mw) / 2 - pad, y0 - lh / 2 - pad * 0.5, mw + pad * 2, lh * lines.length + pad);
+  } else { ctx.lineJoin = "round"; ctx.strokeStyle = "#000"; ctx.lineWidth = em * 0.16; }
+  ctx.fillStyle = T.text_color;
+  lines.forEach((L, li) => { let x = (W - widths[li]) / 2; for (const t of L) { if (transparentBox) ctx.strokeText(t.text, x, y0 + li * lh); ctx.fillText(t.text, x, y0 + li * lh); x += t.w + gap; } });
+}
+
+// ============================================================================ render (tempo real, MediaRecorder)
+let renderEnv = null;
+function recorderMime() {
+  for (const m of ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"])
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return "";
+}
+
+async function getRenderEnv(file) {
+  if (!renderEnv) {
+    const v = document.createElement("video");
+    v.playsInline = true; v.preload = "auto"; v.muted = false;
+    const ac = new AudioContext();
+    const src = ac.createMediaElementSource(v);
+    const gain = ac.createGain();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.2;
+    const makeup = ac.createGain(); makeup.gain.value = 1.4;
+    const dest = ac.createMediaStreamDestination();
+    src.connect(gain).connect(comp).connect(makeup).connect(dest);
+    renderEnv = { v, ac, gain, dest, file: null };
+  }
+  if (renderEnv.file !== file) {
+    renderEnv.file = file; renderEnv.v.src = URL.createObjectURL(file);
+    await new Promise((r, j) => { renderEnv.v.onloadeddata = r; renderEnv.v.onerror = () => j(new Error("não consegui abrir o vídeo para renderizar")); });
+  }
+  await renderEnv.ac.resume();
+  return renderEnv;
+}
+
+async function renderClip(file, clip, edit, prof, track, onProg) {
+  const env = await getRenderEnv(file), v = env.v;
+  const W = prof.format.width, H = prof.format.height, fps = prof.format.fps;
+  const canvas = frameCanvas(W, H), ctx = canvas.getContext("2d");
+  const groups = groupWords(edit.words, prof.captions.animation === "word" ? 1 : prof.captions.words_per_caption);
+  const stream = new MediaStream([...canvas.captureStream(fps).getVideoTracks(), ...env.dest.stream.getAudioTracks()]);
+  const mime = recorderMime();
+  const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
+  const chunks = []; rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  const stopped = new Promise((r) => (rec.onstop = r));
+  const draw = (srcT, seg) => {
+    const outT = seg.out_start + (srcT - seg.src_start);
+    drawVideo(ctx, v, prof, track, srcT, zoomAt(edit.shots, outT));
+    drawTitle(ctx, clip.title, prof);
+    drawCaption(ctx, groups, outT, prof);
+  };
+  let started = false;
+  for (const seg of edit.segments) {
+    v.pause();
+    await seek(v, seg.src_start);
+    draw(seg.src_start, seg);
+    env.gain.gain.setValueAtTime(0, env.ac.currentTime);
+    if (!started) { rec.start(500); started = true; } else rec.resume();
+    env.gain.gain.linearRampToValueAtTime(1, env.ac.currentTime + 0.012);
+    await v.play();
+    await new Promise((res) => {
+      let finished = false;
+      const end = () => { if (!finished) { finished = true; res(); } };
+      const tick = () => {
+        if (finished) return;
+        const t = v.currentTime;
+        if (t >= seg.src_end || v.ended || v.paused) return end();
+        draw(t, seg);
+        onProg(clamp((seg.out_start + t - seg.src_start) / edit.duration, 0, 1));
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(tick); else requestAnimationFrame(tick);
+      };
+      tick();
+      setTimeout(end, (seg.src_end - seg.src_start) * 1000 + 4000);
+    });
+    env.gain.gain.linearRampToValueAtTime(0, env.ac.currentTime + 0.012);
+    await sleep(15);
+    rec.pause(); v.pause();
+  }
+  rec.stop(); await stopped;
+  return { blob: new Blob(chunks, { type: (mime || "video/webm").split(";")[0] }), ext: mime.includes("mp4") ? "mp4" : "webm" };
+}
+
+// ============================================================================ interface
+const state = { profile: structuredClone(PRESETS["padrão"]), poster: null, srcFile: null, mode: "ref" };
+
+function caps() {
+  const pills = [];
+  pills.push([navigator.gpu ? "GPU (WebGPU) ativa" : "sem WebGPU: transcrição mais lenta", navigator.gpu ? "on" : "warn"]);
+  const m = recorderMime();
+  pills.push([m.includes("mp4") ? "exporta MP4" : m ? "exporta WebM" : "navegador sem gravação de vídeo", m.includes("mp4") ? "on" : "warn"]);
+  $("#caps").innerHTML = pills.map(([t, c]) => `<span class="pill ${c}">${t}</span>`).join("");
+}
+
+document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+  document.querySelectorAll("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== t.dataset.tab));
+  state.mode = t.dataset.tab;
+  if (state.mode === "preset") showProfile(structuredClone(PRESETS[$("#presetSel").value]));
+}));
+$("#presetSel").innerHTML = Object.keys(PRESETS).map((k) => `<option>${k}</option>`).join("");
+$("#presetSel").onchange = () => showProfile(structuredClone(PRESETS[$("#presetSel").value]));
+
+function wireDrop(drop, input, cb) {
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) cb(e.dataTransfer.files[0]); };
+  input.onchange = () => input.files[0] && cb(input.files[0]);
+}
+
+wireDrop($("#refDrop"), $("#refFile"), async (file) => {
+  const prog = $("#refProg");
+  $("#learned").hidden = true;
+  try {
+    const { profile, poster } = await analyzeReference(file, (f, m) => setProgress(prog, f, m));
+    state.poster = poster;
+    try { localStorage.setItem("cortaai:estilo", JSON.stringify(profile)); } catch {}
+    showProfile(profile);
+  } catch (e) { console.error(e); setProgress(prog, 0, e.message, true); }
+});
+
+const FIELDS = [
+  ["captions.font", "Fonte da legenda", "select", Object.keys(FONTS)],
+  ["captions.words_per_caption", "Palavras por legenda", "number", [1, 8, 1]],
+  ["captions.position_y", "Altura da legenda", "range", [0.1, 0.95, 0.01]],
+  ["captions.size", "Tamanho da fonte", "range", [0.025, 0.12, 0.001]],
+  ["captions.primary_color", "Cor do texto", "color"],
+  ["captions.highlight_color", "Cor do destaque", "color"],
+  ["captions.outline_width", "Contorno", "range", [0, 0.25, 0.005]],
+  ["captions.animation", "Animação", "select", ["karaoke", "pop", "word", "static"]],
+  ["captions.uppercase", "CAIXA ALTA", "check"],
+  ["captions.enabled", "Legendas ligadas", "check"],
+  ["title.enabled", "Título fixo na tela", "check"],
+  ["format.layout", "Enquadramento", "select", ["crop", "split", "fit_blur", "fit_black"]],
+  ["pacing.cuts_per_min", "Trocas de plano por minuto", "number", [0, 60, 0.5]],
+  ["pacing.punch_in_scale", "Zoom do punch-in", "number", [1, 1.6, 0.01]],
+  ["pacing.jump_cuts", "Cortar pausas", "check"],
+  ["pacing.max_pause_s", "Pausa máxima (s)", "number", [0.05, 2, 0.05]],
+  ["duration.min_s", "Duração mínima (s)", "number", [5, 180, 1]],
+  ["duration.max_s", "Duração máxima (s)", "number", [5, 180, 1]],
+];
+const getp = (o, p) => p.split(".").reduce((a, k) => a?.[k], o);
+const setp = (o, p, v) => { const ks = p.split("."); ks.slice(0, -1).reduce((a, k) => a[k], o)[ks.at(-1)] = v; };
+
+function showProfile(p) {
+  state.profile = p;
+  $("#learned").hidden = false;
+  const e = p.evidence || {}, chips = [];
+  if (e.edicao) chips.push(["Trocas/min", e.edicao.trocas_por_min], ["Punch-ins", e.edicao.punch_ins], ["Plano médio", `${e.edicao.plano_medio_s}s`]);
+  if (e.fala) chips.push(["Palavras/s", e.fala.palavras_por_s], ["Pausa p90", `${e.fala.pausa_p90_s}s`]);
+  if (e.legendas?.animacao) chips.push(["Legenda", `${e.legendas.palavras_por_legenda} pal. · ${e.legendas.animacao}`], ["Fonte", e.legendas.fonte]);
+  if (e.titulo) chips.push(["Título", `"${e.titulo.texto}"`]);
+  if (e.gancho) chips.push(["Gancho", e.gancho.tipo]);
+  if (e.layout) chips.push(["Layout", e.layout]);
+  if (!chips.length) chips.push(["Preset", p.name]);
+  $("#chips").innerHTML = chips.map(([k, v]) => `<div class="chip"><small>${k}</small><b>${String(v).replace(/</g, "&lt;")}</b></div>`).join("");
+  $("#form").innerHTML = FIELDS.map(([path, label, type, opt], i) => {
+    const v = getp(p, path), id = `f${i}`;
+    if (type === "check") return `<label class="check"><input id="${id}" type="checkbox" data-p="${path}" ${v ? "checked" : ""}>${label}</label>`;
+    if (type === "select") return `<label>${label}<select id="${id}" data-p="${path}">${opt.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select></label>`;
+    if (type === "color") return `<label>${label}<input id="${id}" type="color" data-p="${path}" value="${(v || "#ffffff").slice(0, 7)}"></label>`;
+    return `<label>${label}<input id="${id}" type="${type}" data-p="${path}" min="${opt[0]}" max="${opt[1]}" step="${opt[2]}" value="${v}"></label>`;
+  }).join("");
+  $("#form").querySelectorAll("[data-p]").forEach((el) => (el.oninput = () => {
+    let v = el.type === "checkbox" ? el.checked : el.value;
+    if (el.type === "number" || el.type === "range") v = Number(v);
+    if (el.dataset.p === "captions.words_per_caption") v = Math.round(v);
+    setp(state.profile, el.dataset.p, v);
+    drawPreview();
+  }));
+  drawPreview();
+  updateGo();
+}
+
+async function drawPreview() {
+  const p = state.profile, cv = $("#preview"), ctx = cv.getContext("2d");
+  await document.fonts.load(fontCss(p.captions.font, 40)); await document.fonts.load(fontCss(p.title.font, 40));
+  const s = cv.width / p.format.width;
+  ctx.fillStyle = "#1c1b22"; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (state.poster && state.mode === "ref") { ctx.filter = "blur(6px) brightness(0.5)"; ctx.drawImage(state.poster, 0, 0, cv.width, cv.height); ctx.filter = "none"; }
+  ctx.save(); ctx.scale(s, s);
+  const fake = { width: p.format.width, height: p.format.height };
+  const proxy = new Proxy(ctx, { get: (t, k) => (k === "canvas" ? fake : typeof t[k] === "function" ? t[k].bind(t) : t[k]), set: (t, k, v) => ((t[k] = v), true) });
+  const words = ["Você", "sabia", "que", "ninguém", "te", "conta", "isso?"].slice(0, p.captions.words_per_caption).map((text, i) => ({ text, start: i * 0.3, end: i * 0.3 + 0.28 }));
+  drawTitle(proxy, "O segredo que ninguém conta", p);
+  drawCaption(proxy, groupWords(words, p.captions.words_per_caption), 0.35, p);
+  ctx.restore();
+}
+
+function updateGo() { $("#go").disabled = !state.srcFile || !state.profile; }
+wireDrop($("#srcDrop"), $("#srcFile"), (f) => { state.srcFile = f; $("#srcLabel").textContent = f.name; updateGo(); });
+
+try { $("#apiKey").value = localStorage.getItem("cortaai:chave") || ""; } catch {}
+$("#saveKey").onclick = () => { try { localStorage.setItem("cortaai:chave", $("#apiKey").value.trim()); } catch {} $("#saveKey").textContent = "Salvo"; setTimeout(() => ($("#saveKey").textContent = "Salvar"), 1500); };
+
+$("#go").onclick = async () => {
+  const prog = $("#jobProg"), file = state.srcFile, prof = state.profile, n = clamp(+$("#qty").value || 4, 1, 15);
+  $("#go").disabled = true; $("#results").innerHTML = "";
+  try {
+    await Promise.all([document.fonts.load(fontCss(prof.captions.font, 40)), document.fonts.load(fontCss(prof.title.font, 40))]);
+    const tr = await transcribe(file, { size: $("#quality").value, language: $("#lang").value }, (f, m) => setProgress(prog, 0.4 * f, m));
+    if (!tr.words.length) throw new Error("não encontrei fala no vídeo");
+    setProgress(prog, 0.42, "escolhendo os melhores momentos");
+    let clips = null;
+    const key = $("#apiKey").value.trim();
+    if (key) { try { clips = await claudeSelect(tr, prof, n, key); } catch (e) { console.warn(e); setProgress(prog, 0.42, `Claude indisponível (${e.message}); usando o pontuador local`); await sleep(1500); } }
+    if (!clips || !clips.length) clips = heuristicSelect(tr, prof, n);
+    clips = clips.slice(0, n);
+    $("#results").innerHTML = clips.map((c, i) => `<div class="clip pending" id="clip${i}"><video controls playsinline></video><div class="info">
+      <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="note">aguardando</small></div>
+      <div class="title"></div><div class="why"></div></div></div>`).join("");
+    clips.forEach((c, i) => { const el = $(`#clip${i}`); el.querySelector(".title").textContent = c.title; el.querySelector(".why").textContent = c.reason; });
+    const look = await makeVideo(file);
+    for (let i = 0; i < clips.length; i++) {
+      const c = clips[i], el = $(`#clip${i}`), base = 0.45 + (0.55 * i) / clips.length, span = 0.55 / clips.length;
+      const edit = buildEdit(tr.words, c.start, c.end, prof);
+      let track = null;
+      if (prof.format.layout === "crop" || prof.format.layout === "split") {
+        track = await faceTrack(look, c.start, c.end, (f) => setProgress(prog, base + span * 0.15 * f, `corte ${i + 1}/${clips.length}: rastreando rostos`));
+      }
+      el.querySelector(".note").textContent = "gravando…";
+      const { blob, ext } = await renderClip(file, c, edit, prof, track, (f) => setProgress(prog, base + span * (0.15 + 0.85 * f), `corte ${i + 1}/${clips.length}: gravando (${Math.round(f * edit.duration)}s de ${Math.round(edit.duration)}s)`));
+      const url = URL.createObjectURL(blob);
+      el.classList.remove("pending");
+      el.querySelector("video").src = url;
+      el.querySelector(".note").textContent = `${edit.duration.toFixed(1)}s · ${edit.shots.length} planos`;
+      const a = document.createElement("a"); a.href = url; a.download = `corte_${String(i + 1).padStart(2, "0")}.${ext}`; a.textContent = `baixar ${ext.toUpperCase()}`;
+      el.querySelector(".info").appendChild(a);
+      window.cortaaiResults = (window.cortaaiResults || []).concat([{ blob, ext, clip: c, edit }]);
+    }
+    setProgress(prog, 1, "cortes prontos");
+  } catch (e) { console.error(e); setProgress(prog, 0, e.message, true); }
+  $("#go").disabled = false;
+};
+
+caps();
+try { const saved = localStorage.getItem("cortaai:estilo"); if (saved) { state.mode = "ref"; showProfile(JSON.parse(saved)); } else showProfile(structuredClone(PRESETS["padrão"])); } catch { showProfile(structuredClone(PRESETS["padrão"])); }
+window.cortaai = { ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
+</script>
+</body>
+</html>

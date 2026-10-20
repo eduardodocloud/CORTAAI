@@ -18,6 +18,18 @@ padrão nos seus cortes:
 
 Com vários vídeos de referência, ele combina o padrão (mediana dos números, voto nas escolhas).
 
+## Versão de um arquivo só (navegador, sem instalar nada)
+
+Abra **`cortaai.html`** com dois cliques no Chrome ou Edge. Tudo roda no navegador:
+
+- transcrição com Whisper ([transformers.js](https://huggingface.co/docs/transformers.js); usa a GPU via WebGPU quando existe)
+- rostos com [MediaPipe](https://ai.google.dev/edge/mediapipe), legendas da referência lidas com [Tesseract.js](https://tesseract.projectnaptha.com/)
+- cortes desenhados em canvas e gravados pelo próprio navegador (MP4 no Chrome/Edge, WebM em outros)
+
+Precisa de internet só para baixar as bibliotecas e os modelos na primeira vez (o navegador guarda em cache).
+Os cortes são gravados em tempo real (30 s de corte ≈ 30 s), então deixe a aba aberta e visível enquanto gera.
+A análise da referência usa até 90 s do vídeo.
+
 ## Como funciona
 
 ```
