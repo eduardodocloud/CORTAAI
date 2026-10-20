@@ -43,6 +43,7 @@ def test_reference_style_is_recovered(media, monkeypatch, tmp_path):
     r, g, b = (int(c.highlight_color[i:i + 2], 16) for i in (1, 3, 5))
     assert r > 220 and g > 200 and b < 60  # amarelo
     assert p.title.enabled and abs(p.title.position_y - 0.12) < 0.03
+    assert p.title.box_color.upper().startswith("#F") and int(p.title.text_color[1:3], 16) < 60  # texto preto em caixa branca
     assert 22 <= p.pacing.cuts_per_min <= 34  # troca a cada 2s
     assert 1.15 <= p.pacing.punch_in_scale <= 1.35  # punch-in de 1.25
     assert p.content.hook_type == "question"

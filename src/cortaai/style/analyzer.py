@@ -146,16 +146,21 @@ def analyze_text_colors(items: list[tuple[np.ndarray, TextBox]]) -> dict:
 
         # caixa de fundo? a borda da caixa do OCR é fundo; se ela é uniforme e diferente
         # das laterais da tela na mesma altura, há uma caixa atrás do texto
-        ring = _box_pixels(frame, b, pad=0.02)
-        border = np.concatenate([ring[:2].reshape(-1, 3), ring[-2:].reshape(-1, 3),
-                                 ring[:, :2].reshape(-1, 3), ring[:, -2:].reshape(-1, 3)]).astype(np.float32)
-        border_col = np.median(border, axis=0)
-        uniform = float(np.mean(np.abs(border - border_col) < 30)) > 0.85
         H, W = frame.shape[:2]
         y0, y1 = int(b.y * H), int((b.y + b.h) * H)
         side = np.concatenate([frame[y0:y1, : max(1, int(W * 0.04))], frame[y0:y1, -max(1, int(W * 0.04)):]]).reshape(-1, 3)
-        side_col = np.median(side, axis=0) if len(side) else border_col
-        is_box = uniform and float(np.abs(border_col - side_col).mean()) > 35
+        is_box, border_col = False, None
+        # a caixa do OCR pode ficar justa no texto ou quase na borda da caixa: testa duas folgas
+        for pad in (0.02, 0.08):
+            ring = _box_pixels(frame, b, pad=pad)
+            border = np.concatenate([ring[:2].reshape(-1, 3), ring[-2:].reshape(-1, 3),
+                                     ring[:, :2].reshape(-1, 3), ring[:, -2:].reshape(-1, 3)]).astype(np.float32)
+            col = np.median(border, axis=0)
+            uniform = float(np.mean(np.abs(border - col) < 30)) > 0.85
+            side_col = np.median(side, axis=0) if len(side) else col
+            if uniform and float(np.abs(col - side_col).mean()) > 35:
+                is_box, border_col = True, col
+                break
         box_votes.append(is_box)
         if is_box:
             box_cols.append(border_col)
