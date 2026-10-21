@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-4</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-5</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -123,14 +123,6 @@ details .row { margin-top: 10px; }
         <select id="lang"><option value="portuguese">português</option><option value="english">inglês</option><option value="spanish">espanhol</option><option value="">detectar</option></select></label>
       <button class="primary" id="go" disabled>Gerar cortes</button>
     </div>
-    <details>
-      <summary>Usar o Claude para escolher os momentos (opcional)</summary>
-      <div class="row">
-        <input id="apiKey" type="password" placeholder="sk-ant-... (fica salvo só neste navegador)" style="flex:1 1 320px">
-        <button class="ghost" id="saveKey">Salvar</button>
-      </div>
-      <p class="note">Sem chave, um pontuador local escolhe os trechos (gancho, energia da voz, frase completa, duração).</p>
-    </details>
     <p class="note">Os cortes são gravados em tempo real: um corte de 30 s leva cerca de 30 s. Deixe esta aba aberta e visível enquanto gera.</p>
     <div class="progress" id="jobProg" hidden><div class="bar"><i></i></div><small></small></div>
     <div class="results" id="results"></div>
@@ -1023,35 +1015,6 @@ function heuristicSelect(tr, prof, n) {
 
 function shortTitle(t, lim = 34) { t = t.replace(/\s+/g, " ").trim(); return t.length <= lim ? t : t.slice(0, lim).replace(/\s+\S*$/, "") + "…"; }
 
-async function claudeSelect(tr, prof, n, key) {
-  const ss = sentences(tr.words);
-  const fmt = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
-  const prompt = `Transcrição numerada por frase:\n\n${ss.map((s) => `[${s.index}] (${fmt(s.start)}–${fmt(s.end)}) ${s.text}`).join("\n")}\n\nEscolha os ${n} melhores cortes, sem sobreposição.\nRegras:\n- Cada corte deve durar entre ${prof.duration.min_s}s e ${prof.duration.max_s}s (ideal ~${prof.duration.target_s}s).\n- Comece numa frase que funcione sozinha como gancho, sem depender de contexto anterior.\n- Termine com conclusão, punchline ou virada.\n- Estilo a imitar: ${prof.content.guidance}\nOrdene do maior para o menor potencial viral.`;
-  const schema = { type: "object", additionalProperties: false, required: ["clips"], properties: { clips: { type: "array", items: { type: "object", additionalProperties: false,
-    required: ["first_sentence", "last_sentence", "title", "score", "reason"],
-    properties: { first_sentence: { type: "integer" }, last_sentence: { type: "integer" }, title: { type: "string" }, score: { type: "integer" }, reason: { type: "string" } } } } } };
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-    body: JSON.stringify({ model: "claude-opus-5-5", max_tokens: 16000, output_config: { effort: "medium", format: { type: "json_schema", schema } },
-      system: "Você é um editor de cortes virais para TikTok, Reels e Shorts.", messages: [{ role: "user", content: prompt }] }),
-  });
-  if (!r.ok) throw new Error(`Claude respondeu ${r.status}: ${(await r.text()).slice(0, 200)}`);
-  const data = await r.json();
-  if (data.stop_reason === "refusal") throw new Error("o Claude recusou o pedido");
-  const text = data.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-  const out = [], used = [];
-  for (const c of JSON.parse(text).clips) {
-    const i = c.first_sentence, j = c.last_sentence;
-    if (!(i >= 0 && i <= j && j < ss.length)) continue;
-    const d = ss[j].end - ss[i].start;
-    if (d < prof.duration.min_s * 0.8 || d > prof.duration.max_s * 1.2 || used.some(([a, b]) => !(j < a || i > b))) continue;
-    used.push([i, j]);
-    out.push({ start: ss[i].start, end: ss[j].end, score: clamp(c.score, 0, 100), title: shortTitle(c.title), hook: ss[i].text, reason: c.reason });
-  }
-  return out;
-}
-
 // ============================================================================ edição contextual (pausas, planos e zoom decididos pela fala)
 // A referência dá a BASE do estilo (ritmo, força do zoom, tamanho das pausas). Cada corte ajusta
 // isso ao que está sendo dito: ênfases puxam punch-in, ideia nova volta para o plano aberto,
@@ -1551,8 +1514,6 @@ wireDrop($("#srcDrop"), $("#srcFile"), (f) => { state.srcFile = f; $("#srcUrl").
 $("#srcUrl").oninput = () => { if ($("#srcUrl").value.trim()) { state.srcFile = null; $("#srcFile").value = ""; $("#srcLabel").textContent = "Arraste o vídeo longo aqui"; } updateGo(); };
 $("#clearSrc").onclick = () => { state.srcFile = null; $("#srcFile").value = ""; $("#srcUrl").value = ""; $("#srcLabel").textContent = "Arraste o vídeo longo aqui"; updateGo(); };
 
-try { $("#apiKey").value = localStorage.getItem("cortaai:chave") || ""; } catch {}
-$("#saveKey").onclick = () => { try { localStorage.setItem("cortaai:chave", $("#apiKey").value.trim()); } catch {} $("#saveKey").textContent = "Salvo"; setTimeout(() => ($("#saveKey").textContent = "Salvar"), 1500); };
 
 $("#go").onclick = async () => {
   const prog = $("#jobProg"), prof = state.profile, n = clamp(+$("#qty").value || 4, 1, 15);
@@ -1567,11 +1528,7 @@ $("#go").onclick = async () => {
     const tr = await transcribe(file, { size: $("#quality").value, language: $("#lang").value }, (f, m) => setProgress(prog, 0.05 + 0.35 * f, m));
     if (!tr.words.length) throw new Error("não encontrei fala no vídeo");
     setProgress(prog, 0.42, "escolhendo os melhores momentos");
-    let clips = null;
-    const key = $("#apiKey").value.trim();
-    if (key) { try { clips = await claudeSelect(tr, prof, n, key); } catch (e) { console.warn(e); setProgress(prog, 0.42, `Claude indisponível (${e.message}); usando o pontuador local`); await sleep(1500); } }
-    if (!clips || !clips.length) clips = heuristicSelect(tr, prof, n);
-    clips = clips.slice(0, n);
+    const clips = heuristicSelect(tr, prof, n).slice(0, n);
     const energy = energyCurve(tr.audio);
     $("#results").innerHTML = clips.map((c, i) => `<div class="clip pending" id="clip${i}"><video controls playsinline></video><div class="info">
       <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="note">aguardando</small></div>
