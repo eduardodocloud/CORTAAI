@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-6</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-7</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -150,7 +150,17 @@ const CDN = Object.assign({
   tesseractOptions: {},
 }, window.CORTAAI_CDN || {});
 
+// registra a etapa atual: se a aba travar (falta de memória), ao reabrir mostramos onde parou
+function logStage(msg) {
+  try {
+    const m = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null;
+    localStorage.setItem("cortaai:execucao", JSON.stringify({ msg, memMB: m, quando: Date.now(), terminou: false }));
+  } catch {}
+}
+function endStage(ok) { try { const r = JSON.parse(localStorage.getItem("cortaai:execucao") || "{}"); r.terminou = true; r.ok = ok; localStorage.setItem("cortaai:execucao", JSON.stringify(r)); } catch {} }
+
 function setProgress(el, frac, msg, isErr = false) {
+  if (msg && !isErr) logStage(msg);
   el.hidden = false;
   el.querySelector("i").style.width = `${Math.round(clamp(frac || 0, 0, 1) * 100)}%`;
   const s = el.querySelector("small");
@@ -189,9 +199,12 @@ function seek(v, t) {
 
 function frameCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
 
-function grab(v, w) {
+const grabCanvases = new Map();
+function grab(v, w, keep = false) {
   const h = Math.round((v.videoHeight / v.videoWidth) * w / 2) * 2;
-  const c = frameCanvas(w, h);
+  // reaproveita o mesmo canvas (criar milhares de canvases esgota a memória antes do coletor agir)
+  let c = !keep && grabCanvases.get(`${w}x${h}`);
+  if (!c) { c = frameCanvas(w, h); if (!keep) grabCanvases.set(`${w}x${h}`, c); }
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(v, 0, 0, w, h);
   return { canvas: c, img: ctx.getImageData(0, 0, w, h), w, h };
@@ -891,7 +904,7 @@ async function analyzeReference(file, onProg) {
   for (let k = 0; k < nOcr; k++) {
     const t = (k + 0.5) * (dur / nOcr);
     await seek(v, t);
-    const fr = grab(v, 720);
+    const fr = grab(v, 720, k <= 1);
     fr.t = t;
     fr.lines = await ocrFrame(worker, fr.canvas, fr.img);
     if (k > 1) fr.canvas = null; // o 2º frame vira a prévia; dos outros só ficam os pixels
@@ -1445,9 +1458,13 @@ async function getRenderEnv(file) {
   return renderEnv;
 }
 
+// pouca memória (navigator.deviceMemory <= 4 GB): grava em 720p (a gravação em 1080p custa ~500 MB)
+const LOW_MEMORY = (navigator.deviceMemory || 8) <= 4;
+
 async function renderClip(file, clip, edit, prof, track, onProg) {
   const env = await getRenderEnv(file), v = env.v;
-  const W = prof.format.width, H = prof.format.height, fps = prof.format.fps;
+  const k = LOW_MEMORY ? 720 / prof.format.width : 1;
+  const W = Math.round(prof.format.width * k / 2) * 2, H = Math.round(prof.format.height * k / 2) * 2, fps = prof.format.fps;
   const canvas = frameCanvas(W, H), ctx = canvas.getContext("2d");
   const groups = groupWords(edit.words, prof.captions.animation === "word" ? 1 : prof.captions.words_per_caption);
   const stream = new MediaStream([...canvas.captureStream(fps).getVideoTracks(), ...env.dest.stream.getAudioTracks()]);
@@ -1489,6 +1506,8 @@ async function renderClip(file, clip, edit, prof, track, onProg) {
     rec.pause(); v.pause();
   }
   rec.stop(); await stopped;
+  stream.getTracks().forEach((t) => { if (t.kind === "video") t.stop(); });
+  canvas.width = canvas.height = 1; // devolve a memória do canvas na hora
   return { blob: new Blob(chunks, { type: (mime || "video/webm").split(";")[0] }), ext: mime.includes("mp4") ? "mp4" : "webm" };
 }
 
@@ -1648,9 +1667,11 @@ $("#go").onclick = async () => {
       el.querySelector(".info").appendChild(a);
       window.cortaaiResults = (window.cortaaiResults || []).concat([{ blob, ext, clip: c, edit }]);
     }
+    look.removeAttribute("src"); look.load();
     setProgress(prog, 1, "cortes prontos");
+    endStage(true);
   } catch (e) {
-    console.error(e); setProgress(prog, 0, e.message, true);
+    console.error(e); setProgress(prog, 0, e.message, true); endStage(false);
     if (window.cortaaiLinkErrors?.length) {
       const d = document.createElement("details"); d.id = "linkErrors";
       d.innerHTML = `<summary>Ver o motivo de cada servidor (${window.cortaaiLinkErrors.length})</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted);margin:8px 0 0"></pre>`;
@@ -1665,6 +1686,14 @@ $("#go").onclick = async () => {
 };
 
 caps();
+try {
+  const last = JSON.parse(localStorage.getItem("cortaai:execucao") || "null");
+  if (last && !last.terminou && Date.now() - last.quando < 7 * 864e5) {
+    const prog = $("#jobProg");
+    setProgress(prog, 0, `A última execução parou de repente em: "${last.msg}"${last.memMB ? ` (memória da página: ${last.memMB} MB)` : ""}. Se a aba travou por falta de memória, tente a transcrição "rápida", menos cortes ou um vídeo mais curto — e me conte essa etapa.`, true);
+    endStage(false);
+  }
+} catch {}
 try { const saved = localStorage.getItem("cortaai:estilo"); if (saved) { state.mode = "ref"; showProfile(JSON.parse(saved)); } else showProfile(structuredClone(PRESETS["padrão"])); } catch { showProfile(structuredClone(PRESETS["padrão"])); }
 window.cortaai = { readAudio, decodeAudio16kStreaming, youtubeId, fetchVideoFromLink, ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
 </script>
