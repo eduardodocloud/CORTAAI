@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-3</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-4</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -227,14 +227,35 @@ async function decodeAudio16k(file) {
 // então tentamos vários até um funcionar.
 const INVIDIOUS_FALLBACK = ["https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be", "https://invidious.f5.si", "https://inv.tux.pizza", "https://invidious.privacyredirect.com"];
 
+// ajudante local (mesmo conteúdo de scripts/baixar_youtube.bat e .sh): baixa pelo computador do usuário com o yt-dlp
+const HELPER_BAT = "@echo off\r\nREM CortaAI - baixa videos do YouTube (e outros sites) para Downloads\\CortaAI\r\nREM Dois cliques, cole o link, Enter. Depois arraste o arquivo para o cortaai.html.\r\nchcp 65001 >nul\r\nsetlocal EnableDelayedExpansion\r\ntitle CortaAI - baixar video\r\ncd /d \"%~dp0\"\r\nset \"YTDLP=%~dp0yt-dlp.exe\"\r\nset \"OUT=%USERPROFILE%\\Downloads\\CortaAI\"\r\nif not exist \"%OUT%\" mkdir \"%OUT%\"\r\n\r\nif not exist \"%YTDLP%\" (\r\n  echo Baixando o yt-dlp ^(so na primeira vez^)...\r\n  powershell -NoProfile -ExecutionPolicy Bypass -Command \"Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile '%YTDLP%'\"\r\n  if not exist \"%YTDLP%\" ( echo Nao consegui baixar o yt-dlp. Verifique a internet. & pause & exit /b 1 )\r\n) else (\r\n  \"%YTDLP%\" -U >nul 2>nul\r\n)\r\n\r\nREM com ffmpeg: video ate 720p + audio juntos; sem ffmpeg: arquivo unico (geralmente 360p)\r\nset \"FMT=b[ext=mp4]/b\"\r\nwhere ffmpeg >nul 2>nul && set \"FMT=bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b\"\r\nwhere ffmpeg >nul 2>nul || (\r\n  echo.\r\n  echo O ffmpeg nao esta instalado: vou baixar em qualidade menor ^(360p^).\r\n  echo Para 720p, instalo agora o ffmpeg e voce abre este arquivo de novo.\r\n  choice /c SN /m \"Instalar o ffmpeg agora\"\r\n  if !errorlevel! == 1 (\r\n    winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements\r\n    echo Pronto. Feche esta janela e abra o baixar_youtube.bat de novo.\r\n    pause & exit /b 0\r\n  )\r\n)\r\n\r\n:loop\r\necho.\r\nset \"URL=\"\r\nset /p \"URL=Cole o link do video e aperte Enter (vazio para sair): \"\r\nif \"!URL!\"==\"\" exit /b 0\r\n\"%YTDLP%\" --no-playlist -f \"!FMT!\" --merge-output-format mp4 -o \"%OUT%\\%%(title).80s.%%(ext)s\" \"!URL!\"\r\nif errorlevel 1 (\r\n  echo.\r\n  echo O YouTube pediu login. Tentando com a sessao do seu navegador...\r\n  for %%B in (edge chrome firefox brave) do (\r\n    \"%YTDLP%\" --no-playlist --cookies-from-browser %%B -f \"!FMT!\" --merge-output-format mp4 -o \"%OUT%\\%%(title).80s.%%(ext)s\" \"!URL!\" && goto ok\r\n  )\r\n  echo Nao deu certo. Feche o navegador e tente de novo ^(o Chrome trava os cookies enquanto aberto^).\r\n  goto loop\r\n)\r\n:ok\r\necho.\r\necho Video salvo em %OUT% - arraste o arquivo para o CortaAI.\r\nstart \"\" \"%OUT%\"\r\ngoto loop\r\n";
+const HELPER_SH = "#!/usr/bin/env bash\n# CortaAI - baixa videos do YouTube (e outros sites) para ~/Downloads/CortaAI\n# Rode, cole o link, Enter. Depois arraste o arquivo para o cortaai.html.\nset -u\nOUT=\"$HOME/Downloads/CortaAI\"; mkdir -p \"$OUT\"\nDIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\nif command -v yt-dlp >/dev/null; then YTDLP=yt-dlp\nelse\n  case \"$(uname -s)\" in Darwin) BIN=yt-dlp_macos ;; *) BIN=yt-dlp_linux ;; esac\n  YTDLP=\"$DIR/yt-dlp\"\n  if [ ! -x \"$YTDLP\" ]; then\n    echo \"Baixando o yt-dlp (s\u00f3 na primeira vez)...\"\n    curl -fL -o \"$YTDLP\" \"https://github.com/yt-dlp/yt-dlp/releases/latest/download/$BIN\" && chmod +x \"$YTDLP\" || { echo \"N\u00e3o consegui baixar o yt-dlp.\"; exit 1; }\n  fi\nfi\nif command -v ffmpeg >/dev/null; then FMT='bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b'\nelse FMT='b[ext=mp4]/b'; echo \"Sem ffmpeg: vou baixar em 360p. Para 720p: brew install ffmpeg (Mac) ou sudo apt install ffmpeg.\"; fi\nwhile true; do\n  printf '\\nCole o link do v\u00eddeo e aperte Enter (vazio para sair): '; read -r URL || exit 0\n  [ -z \"$URL\" ] && exit 0\n  if ! \"$YTDLP\" --no-playlist -f \"$FMT\" --merge-output-format mp4 -o \"$OUT/%(title).80s.%(ext)s\" \"$URL\"; then\n    echo \"O YouTube pediu login. Tentando com a sess\u00e3o do seu navegador...\"\n    ok=0\n    for B in chrome firefox safari edge brave; do\n      \"$YTDLP\" --no-playlist --cookies-from-browser \"$B\" -f \"$FMT\" --merge-output-format mp4 -o \"$OUT/%(title).80s.%(ext)s\" \"$URL\" && { ok=1; break; }\n    done\n    [ $ok = 1 ] || { echo \"N\u00e3o deu certo. Feche o navegador e tente de novo.\"; continue; }\n  fi\n  echo \"V\u00eddeo salvo em $OUT \u2014 arraste o arquivo para o CortaAI.\"\n  (command -v open >/dev/null && open \"$OUT\") || (command -v xdg-open >/dev/null && xdg-open \"$OUT\") || true\ndone\n";
+
+function helperBox() {
+  const box = document.createElement("div");
+  box.id = "ytHelper"; box.className = "card"; box.style.cssText = "background:var(--panel2);padding:16px;gap:10px";
+  box.innerHTML = `<b>O YouTube está bloqueando os servidores públicos. Baixe pelo seu computador (1 minuto):</b>
+    <ol style="margin:0;padding-left:20px;display:grid;gap:4px;color:var(--text)">
+      <li>Baixe o ajudante e dê dois cliques nele (no Mac/Linux: <code>bash baixar_youtube.sh</code> no Terminal).</li>
+      <li>Cole o link e aperte Enter. O vídeo vai para a pasta <b>Downloads/CortaAI</b>, que abre sozinha.</li>
+      <li>Arraste o arquivo para a área acima e clique em <b>Gerar cortes</b>.</li>
+    </ol>
+    <div class="row"><button class="primary" id="dlBat">Baixar ajudante (Windows)</button><button class="ghost" id="dlSh">Baixar ajudante (Mac/Linux)</button></div>
+    <p class="note" style="margin:0">Na primeira vez ele baixa o yt-dlp (ferramenta gratuita de download) e oferece instalar o ffmpeg para vídeos em 720p.</p>`;
+  const give = (text, name, type) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  box.querySelector("#dlBat").onclick = () => give(HELPER_BAT, "baixar_youtube.bat", "application/x-bat");
+  box.querySelector("#dlSh").onclick = () => give(HELPER_SH, "baixar_youtube.sh", "text/x-shellscript");
+  return box;
+}
+
 const PIPED_FALLBACK = ["https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de", "https://api.piped.private.coffee", "https://pipedapi.r4fo.com", "https://pipedapi.leptons.xyz", "https://piapi.ggtyler.dev"];
 
 async function pipedInstances() {
   try {
     const r = await fetchTimeout("https://piped-instances.kavin.rocks/", 8000);
     const list = (await r.json()).map((i) => i.api_url).filter(Boolean);
-    return [...new Set([...list.slice(0, 8), ...PIPED_FALLBACK])];
-  } catch { return PIPED_FALLBACK; }
+    return [...new Set([...list.slice(0, 3), ...PIPED_FALLBACK])].slice(0, 5);
+  } catch { return PIPED_FALLBACK.slice(0, 5); }
 }
 
 function youtubeId(url) {
@@ -278,8 +299,8 @@ async function invidiousInstances() {
   try {
     const r = await fetchTimeout("https://api.invidious.io/instances.json?sort_by=health", 8000);
     const list = (await r.json()).filter(([, i]) => i.type === "https" && i.api !== false).map(([, i]) => i.uri);
-    return [...new Set([...list.slice(0, 8), ...INVIDIOUS_FALLBACK])];
-  } catch { return INVIDIOUS_FALLBACK; }
+    return [...new Set([...list.slice(0, 3), ...INVIDIOUS_FALLBACK])].slice(0, 5);
+  } catch { return INVIDIOUS_FALLBACK.slice(0, 5); }
 }
 
 async function fetchVideoFromLink(url, onProg) {
@@ -304,7 +325,7 @@ async function fetchVideoFromLink(url, onProg) {
   for (const inst of await invidiousInstances()) {
     try {
       onProg(0, `buscando o vídeo do YouTube (${host(inst)})`);
-      const r = await fetchTimeout(`${inst}/api/v1/videos/${id}?local=true&fields=title,lengthSeconds,formatStreams,error`, 15000);
+      const r = await fetchTimeout(`${inst}/api/v1/videos/${id}?local=true&fields=title,lengthSeconds,formatStreams,error`, 8000);
       const meta = await r.json().catch(() => { throw new Error(`HTTP ${r.status}, resposta inválida`); });
       if (meta.error) throw new Error(String(meta.error).slice(0, 80));
       // vídeo com áudio junto; até 720p (longos: 360p para caber na memória)
@@ -319,7 +340,7 @@ async function fetchVideoFromLink(url, onProg) {
   for (const api of await pipedInstances()) {
     try {
       onProg(0, `buscando o vídeo do YouTube (${host(api)})`);
-      const r = await fetchTimeout(`${api}/streams/${id}`, 15000);
+      const r = await fetchTimeout(`${api}/streams/${id}`, 8000);
       const meta = await r.json().catch(() => { throw new Error(`HTTP ${r.status}, resposta inválida`); });
       if (meta.error || meta.message) throw new Error(String(meta.error || meta.message).slice(0, 80));
       const maxH = (meta.duration || 0) > 3600 ? 360 : 720;
@@ -332,10 +353,9 @@ async function fetchVideoFromLink(url, onProg) {
   console.warn("tentativas:", tried);
   window.cortaaiLinkErrors = tried;
   const blocked = tried.length && tried.every((t) => /Failed to fetch|NetworkError|Load failed|postMessage/i.test(t));
-  throw new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos agora. " +
-    (blocked ? "Parece que esta página está sem acesso à internet para downloads: abra o cortaai.html direto no Chrome ou Edge (dois cliques no arquivo), fora de pré-visualizações. "
-             : "Eles mudam e às vezes ficam fora do ar; tente de novo em alguns minutos. ") +
-    "Se continuar, baixe o vídeo e arraste o arquivo, ou use a versão Python (cortaai servidor), que baixa qualquer link.");
+  throw Object.assign(new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos. " +
+    (blocked ? "Esta página parece estar sem acesso à internet para downloads (abra o cortaai.html direto no Chrome ou Edge, fora de pré-visualizações) — ou use o ajudante abaixo."
+             : "Use o ajudante abaixo para baixar pelo seu computador.")), { youtube: true });
 }
 
 // ============================================================================ transcrição (Whisper no navegador)
@@ -1585,7 +1605,9 @@ $("#go").onclick = async () => {
       const d = document.createElement("details"); d.id = "linkErrors";
       d.innerHTML = `<summary>Ver o motivo de cada servidor (${window.cortaaiLinkErrors.length})</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted);margin:8px 0 0"></pre>`;
       d.querySelector("pre").textContent = window.cortaaiLinkErrors.join("\n");
-      $("#linkErrors")?.remove(); prog.after(d);
+      $("#linkErrors")?.remove(); $("#ytHelper")?.remove();
+      prog.after(d);
+      if (e.youtube) d.before(helperBox());
       window.cortaaiLinkErrors = null;
     }
   }
