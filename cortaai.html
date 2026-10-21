@@ -232,23 +232,34 @@ function youtubeId(url) {
   return m ? m[1] : null;
 }
 
-async function fetchTimeout(url, ms, opts = {}) {
-  const ctl = new AbortController(), id = setTimeout(() => ctl.abort(), ms);
-  try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(id); }
+// tempo limite sem AbortSignal: alguns visualizadores (pré-visualizações, extensões) interceptam
+// o fetch via postMessage e não conseguem repassar um AbortSignal
+function fetchTimeout(url, ms, opts = {}) {
+  return Promise.race([
+    fetch(url, opts),
+    new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("sem resposta"), { name: "Timeout" })), ms)),
+  ]);
 }
 
 async function downloadBlob(url, onProg, label) {
   const r = await fetchTimeout(url, 60000);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const total = +r.headers.get("content-length") || 0, reader = r.body.getReader(), parts = [];
-  let got = 0, last = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    parts.push(value); got += value.length;
-    if (got - last > 2e6) { last = got; onProg(total ? got / total : 0, `${label}: ${(got / 1e6).toFixed(0)} MB${total ? ` de ${(total / 1e6).toFixed(0)} MB` : ""}`); }
+  const total = +r.headers.get("content-length") || 0;
+  let blob;
+  if (r.body && r.body.getReader) {
+    const reader = r.body.getReader(), parts = [];
+    let got = 0, last = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value); got += value.length;
+      if (got - last > 2e6) { last = got; onProg(total ? got / total : 0, `${label}: ${(got / 1e6).toFixed(0)} MB${total ? ` de ${(total / 1e6).toFixed(0)} MB` : ""}`); }
+    }
+    blob = new Blob(parts, { type: r.headers.get("content-type") || "video/mp4" });
+  } else {
+    onProg(0, `${label}…`);
+    blob = await r.blob(); // ambiente sem leitura em partes: baixa de uma vez
   }
-  const blob = new Blob(parts, { type: r.headers.get("content-type") || "video/mp4" });
   if (blob.size < 100000) throw new Error("arquivo vazio");
   return blob;
 }
@@ -287,10 +298,14 @@ async function fetchVideoFromLink(url, onProg) {
       const blob = await downloadBlob(src, onProg, `baixando do YouTube via ${new URL(inst).host}`);
       const name = `${(meta.title || id).replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)}.mp4`;
       return new File([blob], name, { type: blob.type });
-    } catch (e) { tried.push(`${new URL(inst).host}: ${e.name === "AbortError" ? "sem resposta" : e.message}`); console.warn("Invidious falhou", inst, e); }
+    } catch (e) { tried.push(`${new URL(inst).host}: ${e.message}`); console.warn("Invidious falhou", inst, e); }
   }
-  throw new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos agora (eles mudam e às vezes ficam fora do ar). " +
-    "Tente de novo em alguns minutos, baixe o vídeo e arraste o arquivo, ou use a versão Python (cortaai servidor), que baixa qualquer link.");
+  console.warn("tentativas no Invidious:", tried);
+  const blocked = tried.length && tried.every((t) => /Failed to fetch|NetworkError|Load failed|postMessage/i.test(t));
+  throw new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos agora. " +
+    (blocked ? "Parece que esta página está sem acesso à internet para downloads: abra o cortaai.html direto no Chrome ou Edge (dois cliques no arquivo), fora de pré-visualizações. "
+             : "Eles mudam e às vezes ficam fora do ar; tente de novo em alguns minutos. ") +
+    "Se continuar, baixe o vídeo e arraste o arquivo, ou use a versão Python (cortaai servidor), que baixa qualquer link.");
 }
 
 // ============================================================================ transcrição (Whisper no navegador)
