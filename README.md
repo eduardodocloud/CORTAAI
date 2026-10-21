@@ -26,6 +26,12 @@ Abra **`cortaai.html`** com dois cliques no Chrome ou Edge. Tudo roda no navegad
 - rostos com [MediaPipe](https://ai.google.dev/edge/mediapipe), legendas da referência lidas com [Tesseract.js](https://tesseract.projectnaptha.com/)
 - cortes desenhados em canvas e gravados pelo próprio navegador (MP4 no Chrome/Edge, WebM em outros)
 
+O vídeo longo pode ser o **arquivo** ou um **link do YouTube** (watch, youtu.be, shorts, live) ou de um arquivo
+.mp4/.webm. Como o navegador não pode baixar direto do YouTube, o link é baixado por servidores públicos do
+[Invidious](https://invidious.io/) (tenta vários até um responder; até 720p, ou 360p em vídeos com mais de 1 h).
+Esses servidores às vezes ficam fora do ar: aí baixe o vídeo e arraste o arquivo, ou use a versão Python
+(`cortaai servidor`), que baixa qualquer link com o yt-dlp.
+
 Precisa de internet só para baixar as bibliotecas e os modelos na primeira vez (o navegador guarda em cache).
 Os cortes são gravados em tempo real (30 s de corte ≈ 30 s), então deixe a aba aberta e visível enquanto gera.
 A análise da referência usa até 90 s do vídeo.

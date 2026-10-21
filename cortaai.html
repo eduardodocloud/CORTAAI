@@ -112,6 +112,10 @@ details .row { margin-top: 10px; }
     <label class="drop" id="srcDrop"><input id="srcFile" type="file" accept="video/*" hidden>
       <strong id="srcLabel">Arraste o vídeo longo aqui</strong><br>ou clique para escolher</label>
     <div class="row">
+      <input id="srcUrl" type="text" placeholder="…ou cole um link do YouTube (ou de um arquivo .mp4/.webm)" style="flex:1 1 360px">
+      <button class="ghost" id="clearSrc" hidden>Limpar</button>
+    </div>
+    <div class="row">
       <label class="row" style="gap:6px;color:var(--muted)">cortes <input id="qty" type="number" min="1" max="15" value="4" style="width:70px"></label>
       <label class="row" style="gap:6px;color:var(--muted)">transcrição
         <select id="quality"><option value="base">rápida</option><option value="small">precisa</option></select></label>
@@ -215,6 +219,78 @@ async function decodeAudio16k(file) {
   src.buffer = decoded; src.connect(off.destination); src.start();
   const out = await off.startRendering();
   return out.getChannelData(0);
+}
+
+// ============================================================================ vídeo por link (YouTube ou arquivo direto)
+// O navegador não pode baixar direto do YouTube (sem arquivo público e com bloqueio entre sites).
+// Servidores Invidious (espelhos abertos do YouTube) entregam o vídeo com permissão para baixar,
+// então tentamos vários até um funcionar.
+const INVIDIOUS_FALLBACK = ["https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be", "https://invidious.f5.si", "https://inv.tux.pizza", "https://invidious.privacyredirect.com"];
+
+function youtubeId(url) {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+async function fetchTimeout(url, ms, opts = {}) {
+  const ctl = new AbortController(), id = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(id); }
+}
+
+async function downloadBlob(url, onProg, label) {
+  const r = await fetchTimeout(url, 60000);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const total = +r.headers.get("content-length") || 0, reader = r.body.getReader(), parts = [];
+  let got = 0, last = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    if (got - last > 2e6) { last = got; onProg(total ? got / total : 0, `${label}: ${(got / 1e6).toFixed(0)} MB${total ? ` de ${(total / 1e6).toFixed(0)} MB` : ""}`); }
+  }
+  const blob = new Blob(parts, { type: r.headers.get("content-type") || "video/mp4" });
+  if (blob.size < 100000) throw new Error("arquivo vazio");
+  return blob;
+}
+
+async function invidiousInstances() {
+  try {
+    const r = await fetchTimeout("https://api.invidious.io/instances.json?sort_by=health", 8000);
+    const list = (await r.json()).filter(([, i]) => i.type === "https" && i.api !== false).map(([, i]) => i.uri);
+    return [...new Set([...list.slice(0, 8), ...INVIDIOUS_FALLBACK])];
+  } catch { return INVIDIOUS_FALLBACK; }
+}
+
+async function fetchVideoFromLink(url, onProg) {
+  url = url.trim();
+  const id = youtubeId(url);
+  if (!id) {
+    onProg(0, "baixando o vídeo do link");
+    try {
+      const blob = await downloadBlob(url, onProg, "baixando o vídeo");
+      return new File([blob], decodeURIComponent(url.split("/").pop().split("?")[0]) || "video.mp4", { type: blob.type });
+    } catch (e) {
+      throw new Error(`não consegui baixar esse link (${e.message}). Se for de outro site além do YouTube, baixe o vídeo e arraste o arquivo.`);
+    }
+  }
+  const tried = [];
+  for (const inst of await invidiousInstances()) {
+    try {
+      onProg(0, `buscando o vídeo do YouTube (${new URL(inst).host})`);
+      const meta = await (await fetchTimeout(`${inst}/api/v1/videos/${id}?local=true&fields=title,lengthSeconds,formatStreams`, 15000)).json();
+      // vídeo com áudio junto; até 720p (longos: 360p para caber na memória)
+      const maxH = (meta.lengthSeconds || 0) > 3600 ? 360 : 720;
+      const streams = (meta.formatStreams || []).map((f) => ({ ...f, h: parseInt(f.resolution || f.qualityLabel || "0", 10) || 0 }))
+        .filter((f) => /mp4|webm/.test(f.type || "") && f.h <= maxH).sort((a, b) => b.h - a.h);
+      if (!streams.length) throw new Error("sem formato disponível");
+      const src = new URL(streams[0].url, inst).href;
+      const blob = await downloadBlob(src, onProg, `baixando do YouTube via ${new URL(inst).host}`);
+      const name = `${(meta.title || id).replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)}.mp4`;
+      return new File([blob], name, { type: blob.type });
+    } catch (e) { tried.push(`${new URL(inst).host}: ${e.name === "AbortError" ? "sem resposta" : e.message}`); console.warn("Invidious falhou", inst, e); }
+  }
+  throw new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos agora (eles mudam e às vezes ficam fora do ar). " +
+    "Tente de novo em alguns minutos, baixe o vídeo e arraste o arquivo, ou use a versão Python (cortaai servidor), que baixa qualquer link.");
 }
 
 // ============================================================================ transcrição (Whisper no navegador)
@@ -1401,18 +1477,29 @@ async function drawPreview() {
   ctx.restore();
 }
 
-function updateGo() { $("#go").disabled = !state.srcFile || !state.profile; }
-wireDrop($("#srcDrop"), $("#srcFile"), (f) => { state.srcFile = f; $("#srcLabel").textContent = f.name; updateGo(); });
+function updateGo() {
+  const hasUrl = !!$("#srcUrl").value.trim();
+  $("#go").disabled = !(state.srcFile || hasUrl) || !state.profile;
+  $("#clearSrc").hidden = !(state.srcFile || hasUrl);
+}
+wireDrop($("#srcDrop"), $("#srcFile"), (f) => { state.srcFile = f; $("#srcUrl").value = ""; $("#srcLabel").textContent = f.name; updateGo(); });
+$("#srcUrl").oninput = () => { if ($("#srcUrl").value.trim()) { state.srcFile = null; $("#srcFile").value = ""; $("#srcLabel").textContent = "Arraste o vídeo longo aqui"; } updateGo(); };
+$("#clearSrc").onclick = () => { state.srcFile = null; $("#srcFile").value = ""; $("#srcUrl").value = ""; $("#srcLabel").textContent = "Arraste o vídeo longo aqui"; updateGo(); };
 
 try { $("#apiKey").value = localStorage.getItem("cortaai:chave") || ""; } catch {}
 $("#saveKey").onclick = () => { try { localStorage.setItem("cortaai:chave", $("#apiKey").value.trim()); } catch {} $("#saveKey").textContent = "Salvo"; setTimeout(() => ($("#saveKey").textContent = "Salvar"), 1500); };
 
 $("#go").onclick = async () => {
-  const prog = $("#jobProg"), file = state.srcFile, prof = state.profile, n = clamp(+$("#qty").value || 4, 1, 15);
+  const prog = $("#jobProg"), prof = state.profile, n = clamp(+$("#qty").value || 4, 1, 15);
+  let file = state.srcFile;
   $("#go").disabled = true; $("#results").innerHTML = "";
   try {
+    if (!file) {
+      file = await fetchVideoFromLink($("#srcUrl").value, (f, m) => setProgress(prog, 0.05 * f, m));
+      state.srcFile = file; $("#srcLabel").textContent = `${file.name} (baixado do link)`;
+    }
     await Promise.all([document.fonts.load(fontCss(prof.captions.font, 40)), document.fonts.load(fontCss(prof.title.font, 40))]);
-    const tr = await transcribe(file, { size: $("#quality").value, language: $("#lang").value }, (f, m) => setProgress(prog, 0.4 * f, m));
+    const tr = await transcribe(file, { size: $("#quality").value, language: $("#lang").value }, (f, m) => setProgress(prog, 0.05 + 0.35 * f, m));
     if (!tr.words.length) throw new Error("não encontrei fala no vídeo");
     setProgress(prog, 0.42, "escolhendo os melhores momentos");
     let clips = null;
@@ -1453,7 +1540,7 @@ $("#go").onclick = async () => {
 
 caps();
 try { const saved = localStorage.getItem("cortaai:estilo"); if (saved) { state.mode = "ref"; showProfile(JSON.parse(saved)); } else showProfile(structuredClone(PRESETS["padrão"])); } catch { showProfile(structuredClone(PRESETS["padrão"])); }
-window.cortaai = { ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
+window.cortaai = { youtubeId, fetchVideoFromLink, ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
 </script>
 </body>
 </html>
