@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-2</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-3</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -227,6 +227,16 @@ async function decodeAudio16k(file) {
 // então tentamos vários até um funcionar.
 const INVIDIOUS_FALLBACK = ["https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be", "https://invidious.f5.si", "https://inv.tux.pizza", "https://invidious.privacyredirect.com"];
 
+const PIPED_FALLBACK = ["https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de", "https://api.piped.private.coffee", "https://pipedapi.r4fo.com", "https://pipedapi.leptons.xyz", "https://piapi.ggtyler.dev"];
+
+async function pipedInstances() {
+  try {
+    const r = await fetchTimeout("https://piped-instances.kavin.rocks/", 8000);
+    const list = (await r.json()).map((i) => i.api_url).filter(Boolean);
+    return [...new Set([...list.slice(0, 8), ...PIPED_FALLBACK])];
+  } catch { return PIPED_FALLBACK; }
+}
+
 function youtubeId(url) {
   const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([\w-]{11})/);
   return m ? m[1] : null;
@@ -285,22 +295,42 @@ async function fetchVideoFromLink(url, onProg) {
     }
   }
   const tried = [];
+  const host = (u) => { try { return new URL(u).host; } catch { return u; } };
+  const save = async (src, title, via) => {
+    const blob = await downloadBlob(src, onProg, `baixando do YouTube via ${via}`);
+    return new File([blob], `${(title || id).replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)}.mp4`, { type: blob.type });
+  };
+  // 1) Invidious
   for (const inst of await invidiousInstances()) {
     try {
-      onProg(0, `buscando o vídeo do YouTube (${new URL(inst).host})`);
-      const meta = await (await fetchTimeout(`${inst}/api/v1/videos/${id}?local=true&fields=title,lengthSeconds,formatStreams`, 15000)).json();
+      onProg(0, `buscando o vídeo do YouTube (${host(inst)})`);
+      const r = await fetchTimeout(`${inst}/api/v1/videos/${id}?local=true&fields=title,lengthSeconds,formatStreams,error`, 15000);
+      const meta = await r.json().catch(() => { throw new Error(`HTTP ${r.status}, resposta inválida`); });
+      if (meta.error) throw new Error(String(meta.error).slice(0, 80));
       // vídeo com áudio junto; até 720p (longos: 360p para caber na memória)
       const maxH = (meta.lengthSeconds || 0) > 3600 ? 360 : 720;
       const streams = (meta.formatStreams || []).map((f) => ({ ...f, h: parseInt(f.resolution || f.qualityLabel || "0", 10) || 0 }))
         .filter((f) => /mp4|webm/.test(f.type || "") && f.h <= maxH).sort((a, b) => b.h - a.h);
-      if (!streams.length) throw new Error("sem formato disponível");
-      const src = new URL(streams[0].url, inst).href;
-      const blob = await downloadBlob(src, onProg, `baixando do YouTube via ${new URL(inst).host}`);
-      const name = `${(meta.title || id).replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)}.mp4`;
-      return new File([blob], name, { type: blob.type });
-    } catch (e) { tried.push(`${new URL(inst).host}: ${e.message}`); console.warn("Invidious falhou", inst, e); }
+      if (!streams.length) throw new Error("sem formato com áudio disponível");
+      return await save(new URL(streams[0].url, inst).href, meta.title, host(inst));
+    } catch (e) { tried.push(`Invidious ${host(inst)}: ${e.message}`); console.warn("Invidious falhou", inst, e); }
   }
-  console.warn("tentativas no Invidious:", tried);
+  // 2) Piped
+  for (const api of await pipedInstances()) {
+    try {
+      onProg(0, `buscando o vídeo do YouTube (${host(api)})`);
+      const r = await fetchTimeout(`${api}/streams/${id}`, 15000);
+      const meta = await r.json().catch(() => { throw new Error(`HTTP ${r.status}, resposta inválida`); });
+      if (meta.error || meta.message) throw new Error(String(meta.error || meta.message).slice(0, 80));
+      const maxH = (meta.duration || 0) > 3600 ? 360 : 720;
+      const streams = (meta.videoStreams || []).filter((v) => v.videoOnly === false && /mp4|webm/i.test(v.mimeType || v.format || ""))
+        .map((v) => ({ ...v, h: v.height || parseInt(v.quality || "0", 10) || 0 })).filter((v) => v.h <= maxH).sort((a, b) => b.h - a.h);
+      if (!streams.length) throw new Error("sem formato com áudio disponível");
+      return await save(streams[0].url, meta.title, host(api));
+    } catch (e) { tried.push(`Piped ${host(api)}: ${e.message}`); console.warn("Piped falhou", api, e); }
+  }
+  console.warn("tentativas:", tried);
+  window.cortaaiLinkErrors = tried;
   const blocked = tried.length && tried.every((t) => /Failed to fetch|NetworkError|Load failed|postMessage/i.test(t));
   throw new Error("não consegui baixar esse vídeo do YouTube pelos servidores públicos agora. " +
     (blocked ? "Parece que esta página está sem acesso à internet para downloads: abra o cortaai.html direto no Chrome ou Edge (dois cliques no arquivo), fora de pré-visualizações. "
@@ -1549,7 +1579,16 @@ $("#go").onclick = async () => {
       window.cortaaiResults = (window.cortaaiResults || []).concat([{ blob, ext, clip: c, edit }]);
     }
     setProgress(prog, 1, "cortes prontos");
-  } catch (e) { console.error(e); setProgress(prog, 0, e.message, true); }
+  } catch (e) {
+    console.error(e); setProgress(prog, 0, e.message, true);
+    if (window.cortaaiLinkErrors?.length) {
+      const d = document.createElement("details"); d.id = "linkErrors";
+      d.innerHTML = `<summary>Ver o motivo de cada servidor (${window.cortaaiLinkErrors.length})</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted);margin:8px 0 0"></pre>`;
+      d.querySelector("pre").textContent = window.cortaaiLinkErrors.join("\n");
+      $("#linkErrors")?.remove(); prog.after(d);
+      window.cortaaiLinkErrors = null;
+    }
+  }
   $("#go").disabled = false;
 };
 
