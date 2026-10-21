@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-5</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-6</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -146,6 +146,7 @@ const CDN = Object.assign({
   mediapipe: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21",
   faceModel: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
   tesseract: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+  mp4box: "https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js",
   tesseractOptions: {},
 }, window.CORTAAI_CDN || {});
 
@@ -211,6 +212,93 @@ async function decodeAudio16k(file) {
   src.buffer = decoded; src.connect(off.destination); src.start();
   const out = await off.startRendering();
   return out.getChannelData(0);
+}
+
+// Lê o áudio do vídeo em pedaços, direto do arquivo (MP4/MOV/M4A): nunca carrega o vídeo inteiro na
+// memória. Demux com mp4box.js + decodificador nativo do navegador (WebCodecs) + reamostragem para 16 kHz mono.
+async function decodeAudio16kStreaming(file, onProg) {
+  if (!window.AudioDecoder || !window.EncodedAudioChunk) return null;
+  if (!window.MP4Box) { try { await loadScript(CDN.mp4box); } catch { return null; } }
+  const mp4 = window.MP4Box.createFile();
+  mp4.discardMdatData = true; // até achar o índice (moov), não guarda os dados do vídeo
+  let info = null;
+  mp4.onReady = (i) => { info = i; };
+  mp4.onError = () => {};
+  const CH = 4 << 20;
+  let off = 0;
+  while (!info && off < file.size) {
+    const buf = await file.slice(off, off + CH).arrayBuffer();
+    buf.fileStart = off;
+    const next = mp4.appendBuffer(buf);
+    off = next && next > off ? next : off + buf.byteLength;
+  }
+  if (!info || !info.audioTracks?.length) return null;
+  const tr = info.audioTracks[0], trak = mp4.getTrackById(tr.id), entry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
+  let codec = tr.codec;
+  if (/^opus$/i.test(codec)) codec = "opus";
+  let description;
+  try { description = entry.esds.esd.descs[0].descs[0].data; } catch {}
+  const config = { codec, sampleRate: tr.audio.sample_rate, numberOfChannels: tr.audio.channel_count, ...(description ? { description } : {}) };
+  const sup = await AudioDecoder.isConfigSupported(config).catch(() => ({ supported: false }));
+  if (!sup.supported) return null;
+
+  const durS = (tr.duration && tr.timescale ? tr.duration / tr.timescale : info.duration / info.timescale) || 60;
+  let out = new Float32Array(Math.ceil(durS * 16000) + 32000), n = 0;
+  const stepFor = (rate) => rate / 16000;
+  let pos = 0, carry = 0;
+  const push = (mono, rate) => {
+    const step = stepFor(rate);
+    let p = pos;
+    while (p < mono.length - 1) {
+      const i = Math.floor(p), f = p - i, a = i < 0 ? carry : mono[i], b = mono[i + 1];
+      if (n >= out.length) { const bigger = new Float32Array(Math.ceil(out.length * 1.25)); bigger.set(out); out = bigger; }
+      out[n++] = a + (b - a) * f;
+      p += step;
+    }
+    pos = p - mono.length; carry = mono[mono.length - 1];
+  };
+  let decErr = null;
+  const dec = new AudioDecoder({
+    output: (ad) => {
+      const fr = ad.numberOfFrames, ch = ad.numberOfChannels, mono = new Float32Array(fr), tmp = new Float32Array(fr);
+      for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c, format: "f32-planar" }); for (let k = 0; k < fr; k++) mono[k] += tmp[k] / ch; }
+      const rate = ad.sampleRate; ad.close();
+      push(mono, rate);
+    },
+    error: (e) => { decErr = e; },
+  });
+  dec.configure(config);
+  // só os bytes de áudio: lê janelas de 4 MB a partir do índice e descarta cada janela em seguida
+  // (o mp4box guardaria também os dados de vídeo que passam por ele)
+  const samples = mp4.getTrackSamplesInfo(tr.id) || [];
+  let i = 0;
+  while (i < samples.length && !decErr) {
+    const start = samples[i].offset;
+    let j = i, end = start;
+    while (j < samples.length && samples[j].offset >= start && samples[j].offset + samples[j].size - start <= CH) { end = Math.max(end, samples[j].offset + samples[j].size); j++; }
+    if (j === i) { end = samples[i].offset + samples[i].size; j = i + 1; }
+    const buf = await file.slice(start, end).arrayBuffer();
+    for (let k = i; k < j; k++) {
+      const sm = samples[k];
+      dec.decode(new EncodedAudioChunk({ type: "key", timestamp: (1e6 * sm.cts) / sm.timescale, duration: (1e6 * sm.duration) / sm.timescale,
+        data: new Uint8Array(buf, sm.offset - start, sm.size) }));
+    }
+    i = j;
+    while (dec.decodeQueueSize > 64) await sleep(4);
+    onProg?.(i / samples.length);
+  }
+  if (!decErr) await dec.flush().catch((e) => (decErr = e));
+  try { dec.close(); } catch {}
+  if (decErr || n < 16000) { console.warn("leitura em pedaços falhou, usando o método antigo", decErr); return null; }
+  return out.subarray(0, n);
+}
+
+async function readAudio(file, onProg) {
+  const streamed = await decodeAudio16kStreaming(file, onProg).catch((e) => { console.warn(e); return null; });
+  if (streamed) return streamed;
+  // outros formatos (WebM, MKV…): o navegador precisa do arquivo inteiro na memória
+  if (file.size > 1.5e9) throw new Error("vídeo grande demais neste formato para o navegador. Converta para MP4 (ou baixe com o ajudante, que já salva em MP4) e tente de novo.");
+  return decodeAudio16k(file);
 }
 
 // ============================================================================ vídeo por link (YouTube ou arquivo direto)
@@ -352,7 +440,7 @@ async function fetchVideoFromLink(url, onProg) {
 
 // ============================================================================ transcrição (Whisper no navegador)
 const SENT_END = /[.!?…]+["'”»)]*$/;
-let transcriberCache = {};
+const transcriberCache = {};
 
 async function getTranscriber(size, onProg) {
   const key = size;
@@ -392,10 +480,10 @@ function splitOnSilence(audio, target = 28) {
 async function transcribe(file, opts, onProg) {
   if (window.cortaaiTranscriptOverride) {
     const r = await window.cortaaiTranscriptOverride(file);
-    if (r) { if (!r.audio) r.audio = await decodeAudio16k(file).catch(() => null); return { ...r, words: refineWordTimes(r.words, r.audio) }; }
+    if (r) { if (!r.audio) r.audio = await readAudio(file).catch(() => null); return { ...r, words: refineWordTimes(r.words, r.audio) }; }
   }
   onProg(0.01, "lendo o áudio");
-  const audio = await decodeAudio16k(file);
+  const audio = await readAudio(file, (f) => onProg(0.01 + 0.03 * f, `lendo o áudio ${Math.round(f * 100)}%`));
   const tr = await getTranscriber(opts.size, (m) => onProg(0.02, m));
   const words = [];
   const chunks = splitOnSilence(audio);
@@ -749,8 +837,9 @@ async function analyzeReference(file, onProg) {
   onProg(0.3, "analisando cortes, zoom e rostos");
   const det = await getFaceDetector();
   const fps = 6, samples = [];
-  let prevSmall = null, prevGray = null;
-  for (let t = 0; t < dur; t += 1 / fps) {
+  const total = Math.ceil(dur * fps), keepEvery = Math.max(1, Math.floor(total / 12));
+  let prevSmall = null, prevGray = null, prevFaces = [];
+  for (let t = 0, k = 0; t < dur; t += 1 / fps, k++) {
     await seek(v, t);
     const fr = grab(v, 240);
     const g = toGray(fr.img);
@@ -758,8 +847,10 @@ async function analyzeReference(file, onProg) {
     let diff = 0;
     if (prevSmall) { let s = 0; for (let i = 0; i < small.length; i += 16) s += Math.abs(small[i] - prevSmall[i]) + Math.abs(small[i + 1] - prevSmall[i + 1]) + Math.abs(small[i + 2] - prevSmall[i + 2]); diff = s / (small.length / 16) / 3; }
     const faces = detectFaces(det, fr.canvas);
-    samples.push({ t, diff, faces, gray: g, W: fr.w, H: fr.h, prevGray });
-    prevSmall = new Uint8ClampedArray(small); prevGray = g;
+    // punch-in já calculado aqui (só guarda o resultado, não os frames)
+    const zoom = prevGray && diff > 12 && prevFaces.length === 1 && faces.length === 1 ? faceZoom(prevGray, g, fr.w, fr.h, prevFaces[0], faces[0]) : null;
+    samples.push({ t, diff, faces, zoom, W: fr.w, H: fr.h, gray: k % keepEvery === 0 ? g : null });
+    prevSmall = new Uint8ClampedArray(small); prevGray = g; prevFaces = faces;
     if (samples.length % 10 === 0) { onProg(0.3 + 0.25 * (t / dur), "analisando cortes, zoom e rostos"); await yieldUI(); }
   }
   const diffs = samples.slice(1).map((s) => s.diff);
@@ -769,9 +860,7 @@ async function analyzeReference(file, onProg) {
   for (let i = 1; i < samples.length; i++) {
     const loc = samples.slice(Math.max(1, i - 2), i + 3).map((s) => s.diff);
     if (samples[i].diff >= thr && samples[i].diff === Math.max(...loc) && i - last >= Math.round(fps * 0.4)) {
-      const a = samples[i - 1], b = samples[i];
-      let z = null;
-      if (a.faces.length === 1 && b.faces.length === 1) z = faceZoom(a.gray, b.gray, b.W, b.H, a.faces[0], b.faces[0]);
+      const b = samples[i], z = b.zoom;
       events.push(z ? { t: b.t, kind: "zoom", scale: z.scale } : { t: b.t, kind: "cut" });
       last = i;
     }
@@ -783,7 +872,7 @@ async function analyzeReference(file, onProg) {
 
   // layout
   if (aspect < 0.9) {
-    const rows = samples.filter((_, i) => i % Math.max(1, Math.floor(samples.length / 12)) === 0);
+    const rows = samples.filter((s) => s.gray);
     const H = rows[0].H, W = rows[0].W, band = Math.round(H * 0.12);
     const rowStat = (s, y0, y1) => { let m = 0, sh = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; m += s.gray[i]; sh += Math.abs(s.gray[i - 1] - 2 * s.gray[i] + s.gray[i + 1]); n++; } return [m / n, sh / n]; };
     const top = rows.map((s) => rowStat(s, 0, band)), bot = rows.map((s) => rowStat(s, H - band, H)), mid = rows.map((s) => rowStat(s, Math.round(H * 0.4), Math.round(H * 0.6)));
@@ -797,7 +886,7 @@ async function analyzeReference(file, onProg) {
   // legendas e título via OCR
   onProg(0.56, "lendo as legendas (OCR)");
   const worker = await getOCR((m) => onProg(0.56, m));
-  const nOcr = Math.min(50, Math.max(8, Math.round(dur * 1.5)));
+  const nOcr = Math.min(40, Math.max(8, Math.round(dur * 1.5)));
   const frames = [];
   for (let k = 0; k < nOcr; k++) {
     const t = (k + 0.5) * (dur / nOcr);
@@ -805,6 +894,7 @@ async function analyzeReference(file, onProg) {
     const fr = grab(v, 720);
     fr.t = t;
     fr.lines = await ocrFrame(worker, fr.canvas, fr.img);
+    if (k > 1) fr.canvas = null; // o 2º frame vira a prévia; dos outros só ficam os pixels
     frames.push(fr);
     onProg(0.56 + 0.4 * (k / nOcr), `lendo as legendas (OCR) ${k + 1}/${nOcr}`);
   }
@@ -1529,7 +1619,10 @@ $("#go").onclick = async () => {
     if (!tr.words.length) throw new Error("não encontrei fala no vídeo");
     setProgress(prog, 0.42, "escolhendo os melhores momentos");
     const clips = heuristicSelect(tr, prof, n).slice(0, n);
+    // libera memória antes de gravar: modelo de transcrição e áudio inteiro não são mais necessários
+    for (const k of Object.keys(transcriberCache)) { try { await transcriberCache[k].pipe.dispose?.(); } catch {} delete transcriberCache[k]; }
     const energy = energyCurve(tr.audio);
+    tr.audio = null;
     $("#results").innerHTML = clips.map((c, i) => `<div class="clip pending" id="clip${i}"><video controls playsinline></video><div class="info">
       <div class="row" style="justify-content:space-between"><span class="score">${Math.round(c.score)}</span><small class="note">aguardando</small></div>
       <div class="title"></div><div class="why"></div></div></div>`).join("");
@@ -1573,7 +1666,7 @@ $("#go").onclick = async () => {
 
 caps();
 try { const saved = localStorage.getItem("cortaai:estilo"); if (saved) { state.mode = "ref"; showProfile(JSON.parse(saved)); } else showProfile(structuredClone(PRESETS["padrão"])); } catch { showProfile(structuredClone(PRESETS["padrão"])); }
-window.cortaai = { youtubeId, fetchVideoFromLink, ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
+window.cortaai = { readAudio, decodeAudio16kStreaming, youtubeId, fetchVideoFromLink, ocrFrame, getOCR, grab, fontCss, captionMask, analyzeReference, transcribe, heuristicSelect, buildEdit, renderClip, faceTrack, makeVideo, state, PRESETS };
 </script>
 </body>
 </html>
