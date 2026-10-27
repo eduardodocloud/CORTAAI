@@ -77,7 +77,7 @@ details .row { margin-top: 10px; }
 </head>
 <body>
 <header>
-  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.21-7</small></h1>
+  <h1>CORTA<span>AI</span> <small id="ver" style="font:500 12px var(--body);color:var(--muted);letter-spacing:0">v2026.10.27-1</small></h1>
   <div class="pills" id="caps"></div>
 </header>
 <main>
@@ -147,6 +147,7 @@ const CDN = Object.assign({
   faceModel: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
   tesseract: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
   mp4box: "https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js",
+  hfHost: null,
   tesseractOptions: {},
 }, window.CORTAAI_CDN || {});
 
@@ -456,21 +457,51 @@ const SENT_END = /[.!?…]+["'”»)]*$/;
 const transcriberCache = {};
 
 async function getTranscriber(size, onProg) {
-  const key = size;
-  if (transcriberCache[key]) return transcriberCache[key];
+  if (transcriberCache[size]) return transcriberCache[size];
   const T = await import(CDN.transformers);
-  const device = navigator.gpu ? "webgpu" : "wasm";
-  const dtype = device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
+  T.env.allowLocalModels = false;
+  if (CDN.hfHost) T.env.remoteHost = CDN.hfHost; // espelho opcional dos modelos
   const progress_callback = (p) => { if (p.status === "progress" && onProg) onProg(`baixando modelo de transcrição (${p.file}) ${Math.round(p.progress)}%`); };
-  // modelo com atenções expostas = tempo por palavra; senão cai para tempo por trecho
-  for (const [id, word] of [[`onnx-community/whisper-${size}_timestamped`, true], [`Xenova/whisper-${size}`, false]]) {
-    try {
-      const pipe = await T.pipeline("automatic-speech-recognition", id, { device, dtype, progress_callback });
-      transcriberCache[key] = { pipe, word, id };
-      return transcriberCache[key];
-    } catch (e) { console.warn("modelo indisponível", id, e); }
+  // tenta GPU e depois processador; em cada um, o modelo com tempo por palavra e depois o comum
+  const devices = navigator.gpu && !navigator.__cortaaiNoGpu ? ["webgpu", "wasm"] : ["wasm"];
+  const errors = [];
+  for (const device of devices) {
+    const dtype = device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
+    for (const [id, word] of [[`onnx-community/whisper-${size}_timestamped`, true], [`onnx-community/whisper-${size}`, false], [`Xenova/whisper-${size}`, false]]) {
+      try {
+        const pipe = await T.pipeline("automatic-speech-recognition", id, { device, dtype, progress_callback });
+        transcriberCache[size] = { pipe, word, id, device };
+        console.info("transcrição:", id, device);
+        return transcriberCache[size];
+      } catch (e) { errors.push(`${id} (${device}): ${e.message || e}`); console.warn("modelo indisponível", id, device, e); }
+    }
   }
-  throw new Error("não consegui carregar o modelo de transcrição (verifique a internet)");
+  throw new Error("não consegui carregar o modelo de transcrição. Verifique a internet (o modelo é baixado do huggingface.co na primeira vez). Detalhe: " + errors.slice(-2).join(" | "));
+}
+
+async function getTranscriberCpu(size, onProg) {
+  const T = await import(CDN.transformers);
+  const progress_callback = (p) => { if (p.status === "progress" && onProg) onProg(`baixando modelo de transcrição (${p.file}) ${Math.round(p.progress)}%`); };
+  for (const [id, word] of [[`onnx-community/whisper-${size}_timestamped`, true], [`onnx-community/whisper-${size}`, false], [`Xenova/whisper-${size}`, false]]) {
+    try { const pipe = await T.pipeline("automatic-speech-recognition", id, { device: "wasm", dtype: "q8", progress_callback }); return (transcriberCache[size] = { pipe, word, id, device: "wasm" }); }
+    catch (e) { console.warn("modelo indisponível (cpu)", id, e); }
+  }
+  throw new Error("não consegui carregar o modelo de transcrição no processador");
+}
+
+// transcreve um trecho; se o tempo por palavra falhar, refaz com tempo por trecho em vez de abortar
+async function runChunk(tr, chunk, language) {
+  const base = { task: "transcribe" };
+  if (language) base.language = language;
+  if (tr.word) {
+    try { return { out: await tr.pipe(chunk, { ...base, return_timestamps: "word" }), word: true }; }
+    catch (e) { console.warn("tempo por palavra falhou; usando tempo por trecho", e); tr.word = false; }
+  }
+  try { return { out: await tr.pipe(chunk, { ...base, return_timestamps: true }), word: false }; }
+  catch (e) {
+    if (tr.device === "webgpu") throw Object.assign(new Error(`a transcrição falhou na GPU (${e.message || e})`), { gpu: true });
+    throw new Error(`a transcrição falhou (${e.message || e})`);
+  }
 }
 
 function splitOnSilence(audio, target = 28) {
@@ -497,19 +528,29 @@ async function transcribe(file, opts, onProg) {
   }
   onProg(0.01, "lendo o áudio");
   const audio = await readAudio(file, (f) => onProg(0.01 + 0.03 * f, `lendo o áudio ${Math.round(f * 100)}%`));
-  const tr = await getTranscriber(opts.size, (m) => onProg(0.02, m));
+  let tr = await getTranscriber(opts.size, (m) => onProg(0.02, m));
   const words = [];
   const chunks = splitOnSilence(audio);
   for (let k = 0; k < chunks.length; k++) {
     const [offset, chunk] = chunks[k];
-    onProg(0.05 + 0.95 * (k / chunks.length), `transcrevendo ${Math.round(offset / 60)}:${String(Math.round(offset % 60)).padStart(2, "0")} de ${Math.round(audio.length / 16000 / 60)} min`);
-    const gen = { task: "transcribe", return_timestamps: tr.word ? "word" : true };
-    if (opts.language) gen.language = opts.language;
-    const out = await tr.pipe(chunk, gen);
+    onProg(0.05 + 0.95 * (k / chunks.length), `transcrevendo ${Math.floor(offset / 60)}:${String(Math.round(offset % 60)).padStart(2, "0")} de ${Math.round(audio.length / 16000 / 60)} min`);
+    let res;
+    try { res = await runChunk(tr, chunk, opts.language); }
+    catch (e) {
+      if (!e.gpu) throw e;
+      // GPU falhou no meio: segue no processador (mais lento, mas termina)
+      console.warn(e); onProg(0.05 + 0.95 * (k / chunks.length), "a GPU falhou; continuando a transcrição no processador");
+      try { await tr.pipe.dispose?.(); } catch {}
+      delete transcriberCache[opts.size];
+      navigator.__cortaaiNoGpu = true;
+      tr = await getTranscriberCpu(opts.size, (m) => onProg(0.05, m));
+      res = await runChunk(tr, chunk, opts.language);
+    }
+    const out = res.out;
     for (const c of out.chunks || []) {
-      const [s, e] = c.timestamp;
+      const [s, e] = c.timestamp || [0, null];
       const end = e ?? s + 0.3;
-      if (tr.word) {
+      if (res.word) {
         const t = c.text.trim();
         if (t) words.push({ text: t, start: offset + s, end: offset + end });
       } else {
@@ -519,6 +560,10 @@ async function transcribe(file, opts, onProg) {
         let acc = 0;
         for (const w of ws) { const a = offset + s + (acc / tot) * (end - s); acc += w.length + 2; words.push({ text: w, start: a, end: offset + s + (acc / tot) * (end - s) }); }
       }
+    }
+    if (!out.chunks && out.text) { // sem tempos: distribui pelo trecho inteiro
+      const ws = out.text.trim().split(/\s+/).filter(Boolean), dur = chunk.length / 16000;
+      ws.forEach((w, i) => words.push({ text: w, start: offset + (i / ws.length) * dur, end: offset + ((i + 1) / ws.length) * dur }));
     }
     await yieldUI();
   }
